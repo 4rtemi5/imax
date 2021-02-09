@@ -68,8 +68,10 @@ def cutout(image, pad_size, random_key, replace=0):
     image_height = jnp.shape(image)[0]
     image_width = jnp.shape(image)[1]
 
-    if image.shape[-1] == 4:
-        has_alpha = True
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
         image, alpha = image[:,:,:3], image[:,:,-1:]
 
     # Sample the center location in the image where the zero mask will be applied.
@@ -97,6 +99,7 @@ def cutout(image, pad_size, random_key, replace=0):
         jnp.equal(mask, 0),
         jnp.ones_like(image, dtype=image.dtype) * replace,
         image)
+
     if has_alpha:
         image = jnp.concatenate([image, alpha], axis=-1)
 
@@ -107,7 +110,17 @@ def solarize(image, threshold=128):
     # For each pixel in the image, select the pixel
     # if the value is less than the threshold.
     # Otherwise, subtract 255 from the pixel.
-    return jnp.where(image < threshold, image, 255 - image)
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
+    degenerate = jnp.where(image < threshold, image, 255 - image)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def solarize_add(image, addition=0, threshold=128):
@@ -115,13 +128,23 @@ def solarize_add(image, addition=0, threshold=128):
     # we add 'addition' amount to it and then clip the
     # pixel value to be between 0 and 255. The value
     # of 'addition' is between -128 and 128.
-    added_image = image.astype('int64') + addition
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
+    added_image = image.astype('int32') + addition
     added_image = jnp.clip(added_image, 0, 255).astype('uint8')
-    return jnp.where(image < threshold, added_image, image)
+    degenerate = jnp.where(image < threshold, added_image, image)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def rgb_to_grayscale(rgb):
-    return jnp.dot(rgb[..., :3], [0.2989, 0.5870, 0.1140])
+    return jnp.dot(rgb[..., :3], jnp.array([0.2989, 0.5870, 0.1140]))
 
 
 def grayscale_to_rgb(grayscale):
@@ -130,12 +153,27 @@ def grayscale_to_rgb(grayscale):
 
 def color(image, factor):
     """Equivalent of PIL Color."""
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
     degenerate = grayscale_to_rgb(rgb_to_grayscale(image))
-    return blend(degenerate, image, factor)
+    degenerate = blend(degenerate, image, factor)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def contrast(image, factor):
     """Equivalent of PIL Contrast."""
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
     degenerate = rgb_to_grayscale(image)
     # Cast before calling tf.histogram.
     degenerate = degenerate.astype('int32')
@@ -143,36 +181,64 @@ def contrast(image, factor):
     # Compute the grayscale histogram, then compute the mean pixel value,
     # and create a constant image size of that value.  Use that as the
     # blending degenerate target of the original image.
-    hist = jnp.histogram(degenerate, bins=256, range=(0, 255))
+    hist, _ = jnp.histogram(degenerate, bins=256, range=(0, 255))
     mean = jnp.sum(hist.astype('float32')) / 256.0
     degenerate = jnp.ones_like(degenerate, dtype='float32') * mean
     degenerate = jnp.clip(degenerate, 0.0, 255.0)
     degenerate = grayscale_to_rgb(degenerate.astype('uint8'))
-    return blend(degenerate, image, factor)
+    degenerate = blend(degenerate, image, factor)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def brightness(image, factor):
     """Equivalent of PIL Brightness."""
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
     degenerate = jnp.zeros_like(image)
-    return blend(degenerate, image, factor)
+    degenerate = blend(degenerate, image, factor)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def posterize(image, bits):
     """Equivalent of PIL Posterize."""
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
     shift = 8 - bits
-    return jnp.left_shift(jnp.right_shift(image, shift), shift)
+    degenerate = jnp.left_shift(jnp.right_shift(image, shift), shift)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def autocontrast(image):
     """Implements Autocontrast function from PIL using TF ops.
+    Args:
+      image: A 3D uint8 tensor.
 
-  Args:
-    image: A 3D uint8 tensor.
+    Returns:
+      The image after it has had autocontrast applied to it and will be of type
+      uint8.
+    """
+    has_alpha = image.shape[-1] == 4
+    alpha = None
 
-  Returns:
-    The image after it has had autocontrast applied to it and will be of type
-    uint8.
-  """
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
 
     def scale_channel(image):
         """Scale the 2D image using the autocontrast rule."""
@@ -200,11 +266,20 @@ def autocontrast(image):
     s2 = scale_channel(image[:, :, 1])
     s3 = scale_channel(image[:, :, 2])
     image = jnp.stack([s1, s2, s3], 2)
+
+    if has_alpha:
+        return jnp.concatenate([image, alpha], axis=-1)
     return image
 
 
 def sharpness(image, factor):
     """Implements Sharpness function from PIL using TF ops."""
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
     orig_image = image
     image = image.astype('float32')
     # Make image 4D for conv operation.
@@ -213,7 +288,7 @@ def sharpness(image, factor):
     kernel = jnp.array([[1, 1, 1],
                         [1, 5, 1],
                         [1, 1, 1]], dtype='float32')
-    kernel = jnp.reshape(kernel, shape=[3, 3, 1, 1]) / 13.
+    kernel = jnp.reshape(kernel, (3, 3, 1, 1)) / 13.
     # Tile across channel dimension.
     kernel = jnp.tile(kernel, [1, 1, 3, 1])
     strides = [1, 1, 1, 1]
@@ -233,17 +308,26 @@ def sharpness(image, factor):
     result = jnp.where(jnp.equal(padded_mask, 1), padded_degenerate, orig_image)
 
     # Blend the final result.
-    return blend(result, orig_image, factor)
+    degenerate = blend(result, orig_image, factor)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def equalize(image):
     """Implements Equalize function from PIL using TF ops."""
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
 
     def scale_channel(im, c):
         """Scale the data in the channel to implement equalize."""
         im = im[:, :, c].astype('int32')
         # Compute the histogram of the image channel.
-        histo = jnp.histogram(im, bins=255, range=(0, 255))
+        histo, _ = jnp.histogram(im, bins=255, range=(0, 255))
 
         # For the purposes of computing the step, filter out the nonzeros.
         nonzero = jnp.where(jnp.not_equal(histo, 0))
@@ -255,7 +339,7 @@ def equalize(image):
             # and then normalization by step.
             lut = (jnp.cumsum(histo) + (step // 2)) // step
             # Shift lut, prepending with 0.
-            lut = jnp.concatenate([[0], lut[:-1]], 0)
+            lut = jnp.concatenate([jnp.array([0]), lut[:-1]], 0)
             # Clip the counts to be in range.  This is done
             # in the C code for image.point.
             return jnp.clip(lut, 0, 255)
@@ -271,10 +355,23 @@ def equalize(image):
     s1 = scale_channel(image, 0)
     s2 = scale_channel(image, 1)
     s3 = scale_channel(image, 2)
-    image = jnp.stack([s1, s2, s3], 2)
-    return image
+    degenerate = jnp.stack([s1, s2, s3], 2)
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate
 
 
 def invert(image):
     """Inverts the image pixels."""
-    return 255 - image
+    has_alpha = image.shape[-1] == 4
+    alpha = None
+
+    if has_alpha:
+        image, alpha = image[:, :, :3], image[:, :, -1:]
+
+    degenerate = 255 - image
+
+    if has_alpha:
+        return jnp.concatenate([degenerate, alpha], axis=-1)
+    return degenerate

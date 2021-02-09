@@ -22,8 +22,17 @@ def main():
 
     transformed_ims =  [
         color_transforms.blend(image1, image2, 0.5),
+        color_transforms.cutout(image1, 40, key),
+        color_transforms.solarize(image1),
+        color_transforms.solarize_add(image1, 100,),
+        color_transforms.color(image1, 0.2),
+        color_transforms.contrast(image1, 0.6),
+        color_transforms.brightness(image1, 0.5),
+        color_transforms.posterize(image1, 4),
         color_transforms.autocontrast(image1),
-        color_transforms.cutout(image1, 40, key)
+        # color_transforms.sharpness(image1, 0.5),
+        color_transforms.equalize(image1),
+        color_transforms.invert(image1)
     ]
 
     for im in transformed_ims:
