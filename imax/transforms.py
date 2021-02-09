@@ -84,22 +84,22 @@ def apply_transforms(image,
                      depth=-1,
                      intrinsic_matrix=-1):
 
-    image = jnp.where(len(image.shape) == 3,
-                      jnp.expand_dims(image, 0),
-                      image)
+    # image = jnp.where(len(image.shape) == 3,
+    #                   jnp.expand_dims(image, 0),
+    #                   image)
 
     width = image.shape[-2]
     height = image.shape[-3]
 
     depth = jnp.where(jnp.any(depth >= 0),
                       depth,
-                      jnp.expand_dims(jnp.ones(shape=(height, width)), 0))
+                      jnp.ones(shape=(height, width)))
 
     intrinsic_matrix = jnp.where(jnp.any(intrinsic_matrix >= 0),
                                  intrinsic_matrix,
-                                 jnp.array([[[1, 0, width / 2],
+                                 jnp.array([[1, 0, width / 2],
                                              [0, 1, height / 2],
-                                             [0, 0, 1]]],
+                                             [0, 0, 1]],
                                            dtype='float32'))
 
     return projective_inverse_warp(image,

@@ -197,14 +197,14 @@ def pixel2cam(depth, pixel_coords, intrinsics, is_homogeneous=True):
     Returns:
         Coords in the camera frame [batch, 3 (4 if homogeneous), height, width]
     """
-    batch, height, width = depth.shape
-    depth = jnp.reshape(depth, [batch, 1, -1])
-    pixel_coords = jnp.reshape(pixel_coords, [batch, 3, -1])
+    height, width = depth.shape
+    depth = jnp.reshape(depth, [1, -1])
+    pixel_coords = jnp.reshape(pixel_coords, [3, -1])
     cam_coords = jnp.matmul(jnp.linalg.inv(intrinsics), pixel_coords) * depth
     if is_homogeneous:
-        ones = jnp.ones([batch, 1, height * width])
-        cam_coords = jnp.concatenate([cam_coords, ones], axis=1)
-    cam_coords = jnp.reshape(cam_coords, [batch, -1, height, width])
+        ones = jnp.ones([1, height * width])
+        cam_coords = jnp.concatenate([cam_coords, ones], axis=0)
+    cam_coords = jnp.reshape(cam_coords, [-1, height, width])
     return cam_coords
 
 
@@ -217,20 +217,20 @@ def cam2pixel(cam_coords, proj):
     Returns:
         Pixel coordinates projected from the camera frame [batch, height, width, 2]
     """
-    batch, _, height, width = cam_coords.shape
-    cam_coords = jnp.reshape(cam_coords, [batch, 4, -1])
+    _, height, width = cam_coords.shape
+    cam_coords = jnp.reshape(cam_coords, [4, -1])
     unnormalized_pixel_coords = jnp.matmul(proj, cam_coords)
-    x_u = unnormalized_pixel_coords[:, 0:1, :]  # [0:0:0, -1:1:-1]
-    y_u = unnormalized_pixel_coords[:, 1:2, :]  # [0:1:0, -1:1:-1]
-    z_u = unnormalized_pixel_coords[:, 2:3, :]  # [0:2:0, -1:1:-1]
+    x_u = unnormalized_pixel_coords[0:1, :]  # [0:0:0, -1:1:-1]
+    y_u = unnormalized_pixel_coords[1:2, :]  # [0:1:0, -1:1:-1]
+    z_u = unnormalized_pixel_coords[2:3, :]  # [0:2:0, -1:1:-1]
     x_n = x_u / (z_u + 1e-10)
     y_n = y_u / (z_u + 1e-10)
-    pixel_coords = jnp.concatenate([x_n, y_n], axis=1)
-    pixel_coords = jnp.reshape(pixel_coords, [batch, 2, height, width])
-    return jnp.transpose(pixel_coords, axes=[0, 2, 3, 1])
+    pixel_coords = jnp.concatenate([x_n, y_n], axis=0)
+    pixel_coords = jnp.reshape(pixel_coords, [2, height, width])
+    return jnp.transpose(pixel_coords, axes=[1, 2, 0])
 
 
-def meshgrid(batch, height, width, is_homogeneous=True):
+def meshgrid(height, width, is_homogeneous=True):
     """Construct a 2D meshgrid.
     Args:
         batch: batch size
@@ -252,7 +252,7 @@ def meshgrid(batch, height, width, is_homogeneous=True):
         coords = jnp.stack([x_t, y_t, ones], axis=0)
     else:
         coords = jnp.stack([x_t, y_t], axis=0)
-    coords = jnp.tile(jnp.expand_dims(coords, 0), [batch, 1, 1, 1])
+    # coords = jnp.tile(jnp.expand_dims(coords, 0), [batch, 1, 1, 1])
     return coords
 
 
@@ -298,16 +298,16 @@ def projective_inverse_warp(img, transform, mask_value, intrinsics, depth, bilin
         Source image inverse warped to the target image plane [batch, height_t,
         width_t, 3]
     """
-    batch, height, width, channels = img.shape
+    height, width, channels = img.shape
     # Construct pixel grid coordinates
-    pixel_coords = meshgrid(batch, height, width)
+    pixel_coords = meshgrid(height, width)
     # Convert pixel coordinates to the camera frame
     cam_coords = pixel2cam(depth, pixel_coords, intrinsics)
     # Construct a 4x4 intrinsic matrix
-    filler = jnp.array([[[0.0, 0.0, 0.0, 1.0]]])
-    filler = jnp.tile(filler, [batch, 1, 1])
-    intrinsics = jnp.concatenate([intrinsics, jnp.zeros([batch, 3, 1])], axis=2)
-    intrinsics = jnp.concatenate([intrinsics, filler], axis=1)
+    filler = jnp.array([[0.0, 0.0, 0.0, 1.0]])
+    # filler = jnp.tile(filler, [batch, 1, 1])
+    intrinsics = jnp.concatenate([intrinsics, jnp.zeros([3, 1])], axis=1)
+    intrinsics = jnp.concatenate([intrinsics, filler], axis=0)
     # Get a 4x4 transformation matrix from 'target' camera frame to 'source'
     # pixel frame.
     proj_tgt_cam_to_src_pixel = jnp.matmul(intrinsics, transform)
@@ -315,22 +315,22 @@ def projective_inverse_warp(img, transform, mask_value, intrinsics, depth, bilin
 
     output_img = jnp.where(bilinear,
                            bilinear_sampler(img, src_pixel_coords, mask_value),
-                            nearest_sampler(img, src_pixel_coords, mask_value))
+                           nearest_sampler(img, src_pixel_coords, mask_value))
     return output_img.astype('uint8')
 
 
 def nearest_sampler(imgs, coords, mask_value):
-    coords_x, coords_y = jnp.split(coords, 2, axis=3)
+    coords_x, coords_y = jnp.split(coords, 2, axis=2)
     inp_size = imgs.shape
     coord_size = coords.shape
     out_size = list(coords.shape)
-    out_size[3] = imgs.shape[3]
+    out_size[2] = imgs.shape[2]
 
     coords_x = jnp.array(coords_x, dtype='float32')
     coords_y = jnp.array(coords_y, dtype='float32')
 
-    y_max = jnp.array(jnp.shape(imgs)[1] - 1, dtype='float32')
-    x_max = jnp.array(jnp.shape(imgs)[2] - 1, dtype='float32')
+    y_max = jnp.array(jnp.shape(imgs)[0] - 1, dtype='float32')
+    x_max = jnp.array(jnp.shape(imgs)[1] - 1, dtype='float32')
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([0.5], dtype='float32')
 
@@ -344,19 +344,13 @@ def nearest_sampler(imgs, coords, mask_value):
     y0_safe = jnp.clip(y0, zero, y_max)
 
     # indices in the flat image to sample from
-    dim2 = jnp.array(inp_size[2], dtype='float32')
-    dim1 = jnp.array(inp_size[2] * inp_size[1], dtype='float32')
-    base = jnp.reshape(
-        _repeat(
-            jnp.arange(coord_size[0]).astype('float32') * dim1,
-            coord_size[1] * coord_size[2]),
-        [out_size[0], out_size[1], out_size[2], 1])
+    dim2 = jnp.array(inp_size[1], dtype='float32')
 
-    base_y0 = base + y0_safe * dim2
+    base_y0 = y0_safe * dim2
     idx00 = jnp.reshape(x0_safe + base_y0, [-1])
 
     # sample from imgs
-    imgs_flat = jnp.reshape(imgs, [-1, inp_size[3]])
+    imgs_flat = jnp.reshape(imgs, [-1, inp_size[2]])
     imgs_flat = imgs_flat.astype('float32')
     output = jnp.reshape(jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
 
@@ -384,17 +378,17 @@ def bilinear_sampler(imgs, coords, mask_value):
 
 
 
-    coords_x, coords_y = jnp.split(coords, 2, axis=3)
+    coords_x, coords_y = jnp.split(coords, 2, axis=2)
     inp_size = imgs.shape
     coord_size = coords.shape
     out_size = list(coords.shape)
-    out_size[3] = imgs.shape[3]
+    out_size[2] = imgs.shape[2]
 
     coords_x = jnp.array(coords_x, dtype='float32')
     coords_y = jnp.array(coords_y, dtype='float32')
 
-    y_max = jnp.array(jnp.shape(imgs)[1] - 1, dtype='float32')
-    x_max = jnp.array(jnp.shape(imgs)[2] - 1, dtype='float32')
+    y_max = jnp.array(jnp.shape(imgs)[0] - 1, dtype='float32')
+    x_max = jnp.array(jnp.shape(imgs)[1] - 1, dtype='float32')
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([0.5], dtype='float32')
 
@@ -423,24 +417,19 @@ def bilinear_sampler(imgs, coords, mask_value):
     wt_y1 = coords_y_clipped - y0_safe  # 0
 
     # indices in the flat image to sample from
-    dim2 = jnp.array(inp_size[2], dtype='float32')
-    dim1 = jnp.array(inp_size[2] * inp_size[1], dtype='float32')
-    base = jnp.reshape(
-        _repeat(
-            jnp.arange(coord_size[0]).astype('float32') * dim1,
-            coord_size[1] * coord_size[2]),
-        [out_size[0], out_size[1], out_size[2], 1])
+    dim2 = jnp.array(inp_size[1], dtype='float32')
 
-    base_y0 = base + y0_safe * dim2
-    base_y1 = base + y1_safe * dim2
+    base_y0 = y0_safe * dim2
+    base_y1 = y1_safe * dim2
     idx00 = jnp.reshape(x0_safe + base_y0, [-1])
     idx01 = x0_safe + base_y1
     idx10 = x1_safe + base_y0
     idx11 = x1_safe + base_y1
 
     # sample from imgs
-    imgs_flat = jnp.reshape(imgs, [-1, inp_size[3]])
+    imgs_flat = jnp.reshape(imgs, [-1, inp_size[2]])
     imgs_flat = imgs_flat.astype('float32')
+    print(imgs_flat.shape)
     im00 = jnp.reshape(jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
     im01 = jnp.reshape(jnp.take(imgs_flat, idx01.astype('int32'), axis=0), out_size)
     im10 = jnp.reshape(jnp.take(imgs_flat, idx10.astype('int32'), axis=0), out_size)
@@ -457,6 +446,6 @@ def bilinear_sampler(imgs, coords, mask_value):
                      jnp.where(
                          compute_mask(coords_x, coords_y, x_max, y_max),
                          output,
-                         jnp.ones_like(output) * jnp.reshape(jnp.array(mask_value), [1, 1, 1, -1])
+                         jnp.ones_like(output) * jnp.reshape(jnp.array(mask_value), [1, 1, -1])
                      ),
                      output)

@@ -26,14 +26,14 @@ def main():
     # print(jnp.mean(jnp.array(times)))
     # print(jnp.median(jnp.array(times)))
 
-    image = jnp.asarray(Image.open('test/test.jpeg').convert('RGB')).astype('float32')
+    image = jnp.asarray(Image.open('test/test.jpeg').convert('RGBA')).astype('float32')
 
     print(image.shape)
 
     times = []
 
     T = transforms.scale(cx=1, cy=1)()
-    T = transforms.rotate90(n=1)(T)
+    T = transforms.rotate(rz=1)(T)
 
     t0 = time()
     transformed_image = jit(transforms.apply_transforms)(image,
@@ -46,7 +46,7 @@ def main():
         t0 = time()
         transformed_image = jit(transforms.apply_transforms)(image,
                                                              T,
-                                                             mask_value=-1)  # jnp.array([0, 0, 0, 255]))
+                                                             mask_value=jnp.array([0, 0, 0, 255]))
         times.append(time() - t0)
 
     print(jnp.mean(jnp.array(times)))
