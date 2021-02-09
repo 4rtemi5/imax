@@ -48,20 +48,20 @@ def main():
         t0 = time()
         transformed_image = jit(transforms.apply_transforms)(image,
                                                              T,
-                                                             mask_value=jnp.array([0, 0, 0, 255]))
+                                                             mask_value=-1)
         times.append(time() - t0)
 
     print(jnp.mean(jnp.array(times)))
     print(jnp.median(jnp.array(times)))
 
-    plt.imshow(transformed_image[0])
+    plt.imshow(transformed_image)
     plt.show()
 
     #run with vmap
 
     images = jnp.tile(jnp.expand_dims(image, 0), [64, 1, 1, 1])
     Ts = jnp.tile(jnp.expand_dims(T, 0), [64, 1, 1])
-    mask_values = jnp.tile(jnp.expand_dims(-1, 0), [64, 1])
+    mask_values = jnp.tile(-1, [64])
     print(images.shape)
 
     times = []
@@ -82,6 +82,9 @@ def main():
 
     print(jnp.mean(jnp.array(times)))
     print(jnp.median(jnp.array(times)))
+
+    plt.imshow(transformed_image[0])
+    plt.show()
 
 
 if __name__ == '__main__':

@@ -358,7 +358,7 @@ def nearest_sampler(imgs, coords, mask_value):
                      jnp.where(
                          compute_mask(coords_x, coords_y, x_max, y_max),
                          output,
-                         jnp.ones_like(output) * jnp.reshape(jnp.array(mask_value), [1, 1, 1, -1])
+                         jnp.ones_like(output) * jnp.reshape(jnp.array(mask_value), [1, 1, -1])
                      ),
                      output)
 
@@ -429,7 +429,6 @@ def bilinear_sampler(imgs, coords, mask_value):
     # sample from imgs
     imgs_flat = jnp.reshape(imgs, [-1, inp_size[2]])
     imgs_flat = imgs_flat.astype('float32')
-    print(imgs_flat.shape)
     im00 = jnp.reshape(jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
     im01 = jnp.reshape(jnp.take(imgs_flat, idx01.astype('int32'), axis=0), out_size)
     im10 = jnp.reshape(jnp.take(imgs_flat, idx10.astype('int32'), axis=0), out_size)
