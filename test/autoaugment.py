@@ -332,6 +332,7 @@ def sharpness(image, factor):
       shape=[3, 3, 1, 1]) / 13.
   # Tile across channel dimension.
   kernel = tf.tile(kernel, [1, 1, 3, 1])
+  print('kernel:', kernel.shape)
   strides = [1, 1, 1, 1]
   with tf.device('/cpu:0'):
     # Some augmentation that uses depth-wise conv will cause crashing when

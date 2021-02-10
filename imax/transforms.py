@@ -31,50 +31,50 @@ def flip(flip_horizontal=False, flip_vertical=False):
 
     rcx = jnp.cos(rx)
     rsx = jnp.sin(rx)
-    rx = jnp.array([[1, 0, 0, 0],
-                    [0, rcx, rsx, 0],
+    rx = jnp.array([[1,    0,   0, 0],
+                    [0,  rcx, rsx, 0],
                     [0, -rsx, rcx, 0],
-                    [0, 0, 0, 1]])
+                    [0,    0,   0, 1]])
 
     rcy = jnp.cos(ry)
     rsy = jnp.sin(ry)
     ry = jnp.array([[rcy, 0, -rsy, 0],
-                    [0, 1, 0, 0],
-                    [rsy, 0, rcy, 0],
-                    [0, 0, 0, 1]])
+                    [  0, 1,    0, 0],
+                    [rsy, 0,  rcy, 0],
+                    [  0, 0,    0, 1]])
     F = rx @ ry
     return lambda T=I: T @ F
 
 def rotate90(n=0):
     rcz = jnp.cos(jnp.pi/2 * n)
     rsz = jnp.sin(jnp.pi/2 * n)
-    R = jnp.array([[rcz, rsz, 0, 0],
-                    [-rsz, rcz, 0, 0],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1]])
+    R = jnp.array([[ rcz, rsz, 0, 0],
+                   [-rsz, rcz, 0, 0],
+                   [   0,   0, 1, 0],
+                   [   0,   0, 0, 1]])
     return lambda T=I: T @ R
 
 def rotate(rx=0, ry=0, rz=0):
     rcx = jnp.cos(rx)
     rsx = jnp.sin(rx)
-    rx = jnp.array([[1, 0, 0, 0],
-                    [0, rcx, rsx, 0],
+    rx = jnp.array([[1,    0,   0, 0],
+                    [0,  rcx, rsx, 0],
                     [0, -rsx, rcx, 0],
-                    [0, 0, 0, 1]])
+                    [0,    0,   0, 1]])
 
     rcy = jnp.cos(ry)
     rsy = jnp.sin(ry)
     ry = jnp.array([[rcy, 0, -rsy, 0],
-                    [0, 1, 0, 0],
-                    [rsy, 0, rcy, 0],
-                    [0, 0, 0, 1]])
+                    [  0, 1,    0, 0],
+                    [rsy, 0,  rcy, 0],
+                    [  0, 0,    0, 1]])
 
     rcz = jnp.cos(rz)
     rsz = jnp.sin(rz)
-    rz = jnp.array([[rcz, rsz, 0, 0],
+    rz = jnp.array([[ rcz, rsz, 0, 0],
                     [-rsz, rcz, 0, 0],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1]])
+                    [   0,   0, 1, 0],
+                    [   0,   0, 0, 1]])
     R = rx @ ry @ rz
     return lambda T=I: T @ R
 
@@ -98,8 +98,8 @@ def apply_transforms(image,
     intrinsic_matrix = jnp.where(jnp.any(intrinsic_matrix >= 0),
                                  intrinsic_matrix,
                                  jnp.array([[1, 0, width / 2],
-                                             [0, 1, height / 2],
-                                             [0, 0, 1]],
+                                            [0, 1, height / 2],
+                                            [0, 0, 1]],
                                            dtype='float32'))
 
     return projective_inverse_warp(image,

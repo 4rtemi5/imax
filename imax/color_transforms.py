@@ -287,19 +287,22 @@ def sharpness(image, factor):
     # SMOOTH PIL Kernel.
     kernel = jnp.array([[1, 1, 1],
                         [1, 5, 1],
-                        [1, 1, 1]], dtype='float32')
-    kernel = jnp.reshape(kernel, (3, 3, 1, 1)) / 13.
+                        [1, 1, 1]],
+                       dtype='float32') / 13.
+    kernel = jnp.reshape(kernel, (3, 3, 1, 1))
     # Tile across channel dimension.
-    kernel = jnp.tile(kernel, [1, 1, 3, 1])
+    kernel = jnp.tile(kernel, [1, 1, 1, 3])
     strides = [1, 1, 1, 1]
     # degenerate = tf.nn.depthwise_conv2d(image, kernel, strides, padding='VALID', rate=[1, 1])
-    degenerate = lax.conv(jnp.transpose(image,[0,3,1,2]),    # lhs = NCHW image tensor
-                          jnp.transpose(kernel,[3,2,0,1]), # rhs = OIHW conv kernel tensor
-                          (1, 1),  # window strides
-                          'VALID') # padding mode
+    degenerate = lax.conv_general_dilated(
+        jnp.transpose(image,[0,3,1,2]),    # lhs = NCHW image tensor
+        jnp.transpose(kernel,[3,2,0,1]), # rhs = OIHW conv kernel tensor
+        (1, 1),  # window strides
+        'VALID', # padding mode
+        feature_group_count=3)
     degenerate = jnp.clip(degenerate, 0.0, 255.0)
     degenerate = jnp.squeeze(degenerate.astype('uint8'), 0)
-
+    degenerate = jnp.transpose(degenerate, [1, 2, 0])
     # For the borders of the resulting image, fill in the values of the
     # original image.
     mask = jnp.ones_like(degenerate)
@@ -350,8 +353,6 @@ def equalize(image):
             return im.astype('unit8')
         return jnp.take(build_lut(histo, step), im).astype('uint8')
 
-    # TODO: Assumes RGB for now.  Scales each channel independently
-    # and then stacks the result.
     s1 = scale_channel(image, 0)
     s2 = scale_channel(image, 1)
     s3 = scale_channel(image, 2)
