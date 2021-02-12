@@ -66,7 +66,7 @@ def policy_v0():
 
 
 def policy_vtest():
-  """Autoaugment test policy for debugging."""
+  """Autoaugment tests policy for debugging."""
   # Each tuple is an augmentation operation of the form
   # (operation, probability, magnitude). Each element in policy is a
   # sub-policy that will be applied sequentially on the image.
@@ -243,7 +243,7 @@ def rotate(image, degrees, replace):
   # In practice, we should randomize the rotation degrees by flipping
   # it negatively half the time, but that's done on 'degrees' outside
   # of the function.
-  image = contrib_image.rotate(wrap(image), radians)
+  image = contrib_image.rotate_3d(wrap(image), radians)
   return unwrap(image, replace)
 
 
@@ -644,7 +644,7 @@ def distort_image_with_autoaugment(image, augmentation_name):
   Args:
     image: `Tensor` of shape [height, width, 3] representing an image.
     augmentation_name: The name of the AutoAugment policy to use. The available
-      options are `v0` and `test`. `v0` is the policy used for
+      options are `v0` and `tests`. `v0` is the policy used for
       all of the results in the paper and was found to achieve the best results
       on the COCO dataset. `v1`, `v2` and `v3` are additional good policies
       found on the COCO dataset that have slight variation in what operations
@@ -655,7 +655,7 @@ def distort_image_with_autoaugment(image, augmentation_name):
     A tuple containing the augmented versions of `image`.
   """
   available_policies = {'v0': policy_v0,
-                        'test': policy_vtest}
+                        'tests': policy_vtest}
   if augmentation_name not in available_policies:
     raise ValueError('Invalid augmentation_name: {}'.format(augmentation_name))
 

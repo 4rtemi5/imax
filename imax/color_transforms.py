@@ -1,57 +1,61 @@
-from jax import jit, lax, random
+import jax
+from jax import lax, random
 import jax.numpy as jnp
 
 
+@jax.jit
+def apply_blend(image1, image2, factor):
+    image_dtype = image1.dtype
+    image1 = image1.astype('int32')
+    image2 = image2.astype('int32')
+
+    difference = image2 - image1
+    scaled = factor * difference
+
+    # Do addition in float.
+    temp = image1 + scaled
+
+    # Interpolate
+    # if 0.0 < factor < 1.0:
+    #     return temp.astype(image_dtype)  # Interpolation means we always stay within 0 and 255.
+    return jnp.clip(temp, 0.0, 255.0).astype(image_dtype)  # Extrapolate: We need to clip and then cast.
+
+
+@jax.jit
 def blend(image1, image2, factor):
     """Blend image1 and image2 using 'factor'.
 
-  Factor can be above 0.0.  A value of 0.0 means only image1 is used.
-  A value of 1.0 means only image2 is used.  A value between 0.0 and
-  1.0 means we linearly interpolate the pixel values between the two
-  images.  A value greater than 1.0 "extrapolates" the difference
-  between the two pixel values, and we clip the results to values
-  between 0 and 255.
+    Factor can be above 0.0.  A value of 0.0 means only image1 is used.
+    A value of 1.0 means only image2 is used.  A value between 0.0 and
+    1.0 means we linearly interpolate the pixel values between the two
+    images.  A value greater than 1.0 "extrapolates" the difference
+    between the two pixel values, and we clip the results to values
+    between 0 and 255.
 
-  Args:
+    Args:
     image1: An image Tensor of type uint8.
     image2: An image Tensor of type uint8.
     factor: A floating point value above 0.0.
 
-  Returns:
+    Returns:
     A blended image Tensor of type uint8.
-  """
-    def apply_blend(image1, image2, factor):
-        image1 = image1.astype('float32')
-        image2 = image2.astype('float32')
+    """
 
-        difference = image2 - image1
-        scaled = factor * difference
-
-        # Do addition in float.
-        temp = image1 + scaled
-
-        # Interpolate
-        output = lax.cond(jnp.all(0.0 < factor < 1.0),
-                          (),
-                          lambda x: temp,  # Interpolation means we always stay within 0 and 255.
-                          (),
-                          lambda x: jnp.clip(temp, 0.0, 255.0))  # Extrapolate: We need to clip and then cast.
-        return output.astype('uint8')
-
-    output = lax.cond(
-        jnp.equal(factor, 0.0),
-        (),
-        lambda x: image1,
-        (),
-        lambda x: lax.cond(
-            jnp.equal(factor, 1.0),
-            (),
-            lambda x: image2,
-            (),
-            lambda x: apply_blend(image1, image2, factor)
-        )
-    )
-    return output
+    # output = lax.cond(
+    #     jnp.equal(factor, 0.0),
+    #     (),
+    #     lambda x: image1,
+    #     (),
+    #     lambda x: lax.cond(
+    #         jnp.equal(factor, 1),
+    #         (),
+    #         lambda y: image2,
+    #         (),
+    #         lambda y: apply_blend(image1, image2, factor)
+    #     )
+    # )
+    # return output
+    return apply_blend(image1, image2, factor)
 
 
 def get_random_cutout_mask(random_key, image_shape, max_mask_shape=(40, 40)):
@@ -78,36 +82,37 @@ def get_random_cutout_mask(random_key, image_shape, max_mask_shape=(40, 40)):
     left_pad = jnp.maximum(0, cutout_center_width - pad_size_x).astype('int32')
     right_pad = jnp.maximum(0, image_width - cutout_center_width - pad_size_x).astype('int32')
 
-    print(image_height, lower_pad, upper_pad)
+    # print(image_height, lower_pad, upper_pad)
 
     cutout_shape = ((image_height - (lower_pad + upper_pad)),
                     (image_width - (left_pad + right_pad)))
-    print(cutout_shape)
+    # print(cutout_shape)
     padding_dims = jnp.array([[lower_pad, upper_pad], [left_pad, right_pad]], dtype='int32')
     mask = jnp.pad(
-        jnp.zeros(cutout_shape, dtype='uint8'),
-        padding_dims, constant_values=1)
+        jnp.ones(cutout_shape, dtype='uint8'),
+        padding_dims, constant_values=0)
     mask = jnp.expand_dims(mask, -1)
-    return mask
+    return mask.astype('bool')
 
 
+@jax.jit
 def cutout(image, mask, replace=0):
     """Apply cutout (https://arxiv.org/abs/1708.04552) to image.
 
-  This operation applies a (2*pad_size x 2*pad_size) mask of zeros to
-  a random location within `img`. The pixel values filled in will be of the
-  value `replace`. The located where the mask will be applied is randomly
-  chosen uniformly over the whole image.
+    This operation applies a (2*pad_size x 2*pad_size) mask of zeros to
+    a random location within `img`. The pixel values filled in will be of the
+    value `replace`. The located where the mask will be applied is randomly
+    chosen uniformly over the whole image.
 
-  Args:
+    Args:
     image: An image Tensor of type uint8.
     mask: cutout mask to be applied to the image
     replace: What pixel value to fill in the image in the area that has
       the cutout mask applied to it.
 
-  Returns:
+    Returns:
     An image Tensor that is of type uint8.
-  """
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 
@@ -116,7 +121,7 @@ def cutout(image, mask, replace=0):
 
     mask = jnp.tile(mask, [1, 1, 3])
     image = jnp.where(
-        mask == 0,
+        mask,
         jnp.ones_like(image, dtype=image.dtype) * replace,
         image)
 
@@ -126,6 +131,7 @@ def cutout(image, mask, replace=0):
     return image
 
 
+@jax.jit
 def solarize(image, threshold=128):
     # For each pixel in the image, select the pixel
     # if the value is less than the threshold.
@@ -143,6 +149,7 @@ def solarize(image, threshold=128):
     return degenerate
 
 
+@jax.jit
 def solarize_add(image, addition=0, threshold=128):
     # For each pixel in the image less than threshold
     # we add 'addition' amount to it and then clip the
@@ -163,14 +170,17 @@ def solarize_add(image, addition=0, threshold=128):
     return degenerate
 
 
+@jax.jit
 def rgb_to_grayscale(rgb):
     return jnp.dot(rgb[..., :3], jnp.array([0.2989, 0.5870, 0.1140]).astype('uint8'))
 
 
+@jax.jit
 def grayscale_to_rgb(grayscale):
     return jnp.stack((grayscale,) * 3, axis=-1)
 
 
+@jax.jit
 def color(image, factor):
     """Equivalent of PIL Color."""
     has_alpha = image.shape[-1] == 4
@@ -186,6 +196,7 @@ def color(image, factor):
     return degenerate
 
 
+@jax.jit
 def contrast(image, factor):
     """Equivalent of PIL Contrast."""
     has_alpha = image.shape[-1] == 4
@@ -205,7 +216,7 @@ def contrast(image, factor):
     mean = jnp.sum(hist.astype('float32')) / 256.0
     degenerate = jnp.ones_like(degenerate, dtype='float32') * mean
     degenerate = jnp.clip(degenerate, 0.0, 255.0)
-    degenerate = grayscale_to_rgb(degenerate).astype('uint8')
+    degenerate = grayscale_to_rgb(degenerate).astype(image.dtype)
     degenerate = blend(degenerate, image, factor)
 
     if has_alpha:
@@ -213,6 +224,7 @@ def contrast(image, factor):
     return degenerate
 
 
+@jax.jit
 def brightness(image, factor):
     """Equivalent of PIL Brightness."""
     has_alpha = image.shape[-1] == 4
@@ -222,13 +234,14 @@ def brightness(image, factor):
         image, alpha = image[:, :, :3], image[:, :, -1:]
 
     degenerate = jnp.zeros_like(image)
-    degenerate = blend(degenerate, image, factor)
+    degenerate = blend(degenerate, image, factor).astype(image.dtype)
 
     if has_alpha:
         return jnp.concatenate([degenerate, alpha], axis=-1)
     return degenerate
 
 
+@jax.jit
 def posterize(image, bits):
     """Equivalent of PIL Posterize."""
     has_alpha = image.shape[-1] == 4
@@ -245,6 +258,7 @@ def posterize(image, bits):
     return degenerate
 
 
+@jax.jit
 def autocontrast(image):
     """Implements Autocontrast function from PIL using Jax ops.
     Args:
@@ -260,7 +274,8 @@ def autocontrast(image):
     if has_alpha:
         image, alpha = image[:, :, :3], image[:, :, -1:]
 
-    def scale_channel(_image):
+    @jax.jit
+    def _scale_channel(_image):
         """Scale the 2D image using the autocontrast rule."""
         # A possibly cheaper version can be done using cumsum/unique_with_counts
         # over the histogram values, rather than iterating over the entire image.
@@ -269,7 +284,8 @@ def autocontrast(image):
         hi = jnp.max(_image).astype('float32')
 
         # Scale the image, making the lowest value 0 and the highest value 255.
-        def scale_values(_im):
+        @jax.jit
+        def _scale_values(_im):
             scale = 255.0 / (hi - lo)
             offset = -lo * scale
             _im = _im.astype('float32') * scale + offset
@@ -277,14 +293,14 @@ def autocontrast(image):
             return _im.astype('uint8')
 
         return jnp.where(hi > lo,
-                         scale_values(image),
-                         image)
+                         _scale_values(_image),
+                         _image)
 
     # Assumes RGB for now.  Scales each channel independently
     # and then stacks the result.
-    s1 = scale_channel(image[:, :, 0])
-    s2 = scale_channel(image[:, :, 1])
-    s3 = scale_channel(image[:, :, 2])
+    s1 = _scale_channel(image[:, :, 0])
+    s2 = _scale_channel(image[:, :, 1])
+    s3 = _scale_channel(image[:, :, 2])
     image = jnp.stack([s1, s2, s3], 2)
 
     if has_alpha:
@@ -292,6 +308,7 @@ def autocontrast(image):
     return image
 
 
+@jax.jit
 def sharpness(image, factor):
     """Implements Sharpness function from PIL using Jax ops."""
     has_alpha = image.shape[-1] == 4
@@ -312,13 +329,12 @@ def sharpness(image, factor):
     kernel = jnp.reshape(kernel, (3, 3, 1, 1))
     # Tile across channel dimension.
     kernel = jnp.tile(kernel, [1, 1, 1, 3])
-    strides = [1, 1, 1, 1]
     # degenerate = tf.nn.depthwise_conv2d(image, kernel, strides, padding='VALID', rate=[1, 1])
     degenerate = lax.conv_general_dilated(
-        jnp.transpose(image,[0,3,1,2]),    # lhs = NCHW image tensor
-        jnp.transpose(kernel,[3,2,0,1]), # rhs = OIHW conv kernel tensor
+        jnp.transpose(image, [0, 3, 1, 2]),    # lhs = NCHW image tensor
+        jnp.transpose(kernel, [3, 2, 0, 1]),   # rhs = OIHW conv kernel tensor
         (1, 1),  # window strides
-        'VALID', # padding mode
+        'VALID',  # padding mode
         feature_group_count=3)
     degenerate = jnp.clip(degenerate, 0.0, 255.0)
     degenerate = jnp.squeeze(degenerate.astype('uint8'), 0)
@@ -338,6 +354,7 @@ def sharpness(image, factor):
     return degenerate
 
 
+@jax.jit
 def build_lut(histo, step):
     # Compute the cumulative sum, shifting by step // 2
     # and then normalization by step.
@@ -349,6 +366,7 @@ def build_lut(histo, step):
     return jnp.clip(lut, 0, 255)
 
 
+@jax.jit
 def scale_channel(im, test_agains_original=False):
     """Scale the data in the channel to implement equalize."""
     # im = im[:, :, c].astype('int32')
@@ -377,6 +395,7 @@ def scale_channel(im, test_agains_original=False):
                      jnp.take(build_lut(histo, step), im).astype('uint8'))
 
 
+@jax.jit
 def equalize(image):
     """Implements Equalize function from PIL using Jax ops."""
     has_alpha = image.shape[-1] == 4
@@ -391,6 +410,7 @@ def equalize(image):
     return degenerate
 
 
+@jax.jit
 def invert(image):
     """Inverts the image pixels."""
     has_alpha = image.shape[-1] == 4
@@ -406,17 +426,17 @@ def invert(image):
     return degenerate
 
 
-blend = jit(blend, static_argnums=(2,))
-cutout = jit(cutout)
-solarize = jit(solarize)
-solarize_add = jit(solarize_add)
-rgb_to_grayscale = jit(rgb_to_grayscale)
-grayscale_to_rgb = jit(grayscale_to_rgb)
-color = jit(color, static_argnums=(1,))
-contrast = jit(contrast, static_argnums=(1,))
-brightness = jit(brightness, static_argnums=(1,))
-posterize = jit(posterize)
-autocontrast = jit(autocontrast)
-sharpness = jit(sharpness, static_argnums=(1,))
-equalize = jit(equalize)
-invert = jit(invert)
+# blend = jax.jit(blend) #, static_argnums=(2,))
+# cutout = jax.jit(cutout)
+# solarize = jax.jit(solarize)
+# solarize_add = jax.jit(solarize_add)
+# rgb_to_grayscale = jax.jit(rgb_to_grayscale)
+# grayscale_to_rgb = jax.jit(grayscale_to_rgb)
+# color = jax.jit(color) #, static_argnums=(1,))
+# contrast = jax.jit(contrast) #, static_argnums=(1,))
+# brightness = jax.jit(brightness) #, static_argnums=(1,))
+# posterize = jax.jit(posterize)
+# autocontrast = jax.jit(autocontrast)
+# sharpness = jax.jit(sharpness) #, static_argnums=(1,))
+# equalize = jax.jit(equalize)
+# invert = jax.jit(invert)
