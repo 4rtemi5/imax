@@ -1,12 +1,11 @@
 import jax.numpy as jnp
-from jax import jit, vmap, random# , grad
+from jax import jit, vmap, random  # , grad
 
 from matplotlib import pyplot as plt
 from imax import transforms
 from imax import color_transforms
 from PIL import Image
 from time import time
-
 
 
 def main():
@@ -16,29 +15,86 @@ def main():
     # plt.imshow(img)
     # plt.show()
 
-    key = random.PRNGKey(42)
+    random_key = random.PRNGKey(42)
     image1 = jnp.asarray(Image.open('test/test.jpeg').convert('RGBA')).astype('uint8')
-    image2 = jnp.asarray(Image.open('test/test.jpeg').convert('RGBA').rotate(90)).astype('float32')
+    image2 = jnp.asarray(Image.open('test/test.jpeg').convert('RGBA').rotate(90)).astype('uint8')
 
-    transformed_ims =  {
+    images1 = jnp.tile(jnp.expand_dims(image1, 0), [64, 1, 1, 1])
+    images2 = jnp.tile(jnp.expand_dims(image2, 0), [64, 1, 1, 1])
+
+    cutout_mask = color_transforms.get_random_cutout_mask(random_key, image1.shape, (80, 80))
+
+
+
+    t0 = time()
+
+    transformed_ims = {
         'none': image1,
-        # 'blend': color_transforms.blend(image1, image2, 0.5),
-        # 'cutout': color_transforms.cutout(image1, 40, key),
-        # 'solarize': color_transforms.solarize(image1),
-        # 'solarize_add': color_transforms.solarize_add(image1, 100,),
-        # 'color': color_transforms.color(image1, 0.2),
-        # 'contrast': color_transforms.contrast(image1, 0.6),
-        # 'brightness': color_transforms.brightness(image1, 0.5),
-        # 'posterize1': color_transforms.posterize(image1, 1),
-        # 'posterize2': color_transforms.posterize(image1, 2),
-        # 'posterize4': color_transforms.posterize(image1, 4),
-        # 'posterize6': color_transforms.posterize(image1, 6),
-        # 'autocontrast': color_transforms.autocontrast(image1),
+        'blend': color_transforms.blend(image1, image2, 0.5),
+        'cutout': color_transforms.cutout(image1, cutout_mask),
+        'solarize': color_transforms.solarize(image1),
+        'solarize_add': color_transforms.solarize_add(image1, 100,),
+        'color': color_transforms.color(image1, 0.2),
+        'contrast': color_transforms.contrast(image1, 0.6),
+        'brightness': color_transforms.brightness(image1, 0.5),
+        'posterize1': color_transforms.posterize(image1, 1),
+        'posterize2': color_transforms.posterize(image1, 2),
+        'posterize4': color_transforms.posterize(image1, 4),
+        'posterize6': color_transforms.posterize(image1, 6),
+        'autocontrast': color_transforms.autocontrast(image1),
         'sharpness_0.1': color_transforms.sharpness(image1, 0.1),
         'sharpness_2.0': color_transforms.sharpness(image1, 2.0),
-        # 'equalize': color_transforms.equalize(image1),
-        # 'invert': color_transforms.invert(image1),
+        'equalize': color_transforms.equalize(image1),
+        'invert': color_transforms.invert(image1),
     }
+    print(time() - t0)
+
+    t0 = time()
+
+    transformed_ims = {
+        'none': image1,
+        'blend': color_transforms.blend(image1, image2, 0.5),
+        'cutout': color_transforms.cutout(image1, cutout_mask),
+        'solarize': color_transforms.solarize(image1),
+        'solarize_add': color_transforms.solarize_add(image1, 100, ),
+        'color': color_transforms.color(image1, 0.2),
+        'contrast': color_transforms.contrast(image1, 0.6),
+        'brightness': color_transforms.brightness(image1, 0.5),
+        'posterize1': color_transforms.posterize(image1, 1),
+        'posterize2': color_transforms.posterize(image1, 2),
+        'posterize4': color_transforms.posterize(image1, 4),
+        'posterize6': color_transforms.posterize(image1, 6),
+        'autocontrast': color_transforms.autocontrast(image1),
+        'sharpness_0.1': color_transforms.sharpness(image1, 0.1),
+        'sharpness_2.0': color_transforms.sharpness(image1, 2.0),
+        'equalize': color_transforms.equalize(image1),
+        'invert': color_transforms.invert(image1),
+    }
+    print(time() - t0)
+
+    t0 = time()
+
+    transformed_ims = {
+        'none': image1,
+        'blend': color_transforms.blend(image1, image2, 0.5),
+        'cutout': color_transforms.cutout(image1, cutout_mask),
+        'solarize': color_transforms.solarize(image1),
+        'solarize_add': color_transforms.solarize_add(image1, 100, ),
+        'color': color_transforms.color(image1, 0.2),
+        'contrast': color_transforms.contrast(image1, 0.6),
+        'brightness': color_transforms.brightness(image1, 0.5),
+        'posterize1': color_transforms.posterize(image1, 1),
+        'posterize2': color_transforms.posterize(image1, 2),
+        'posterize4': color_transforms.posterize(image1, 4),
+        'posterize6': color_transforms.posterize(image1, 6),
+        'autocontrast': color_transforms.autocontrast(image1),
+        'sharpness_0.1': color_transforms.sharpness(image1, 0.1),
+        'sharpness_2.0': color_transforms.sharpness(image1, 2.0),
+        'equalize': color_transforms.equalize(image1),
+        'invert': color_transforms.invert(image1),
+    }
+    print(time() - t0)
+
 
     for name, im in transformed_ims.items():
         plt.imshow(im)
