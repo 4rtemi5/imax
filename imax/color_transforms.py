@@ -62,17 +62,17 @@ def get_random_cutout_mask(random_key, image_shape, max_mask_shape=(40, 40)):
     # TODO: currently not jitable
     image_height = image_shape[0]
     image_width = image_shape[1]
-    mask_height = int(max_mask_shape[0]//2)
-    mask_width = int(max_mask_shape[1]//2)
+    mask_height = (max_mask_shape[0]//2).astype(int)
+    mask_width = (max_mask_shape[1]//2).astype(int)
 
     random_key, subkey = random.split(random_key)
-    pos_x = random.randint(subkey, shape=(), minval=0, maxval=image_width).item()
+    pos_x = random.randint(subkey, shape=(), minval=0, maxval=image_width)#.item()
     random_key, subkey = random.split(random_key)
-    pos_y = random.uniform(subkey, shape=(), minval=0, maxval=image_height).item()
+    pos_y = random.uniform(subkey, shape=(), minval=0, maxval=image_height)#.item()
     random_key, subkey = random.split(random_key)
-    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=mask_width).item()
+    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=mask_width)#.item()
     random_key, subkey = random.split(random_key)
-    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=mask_height).item()
+    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=mask_height)#.item()
 
     cutout_center_height = pos_y
     cutout_center_width = pos_x
@@ -424,19 +424,3 @@ def invert(image):
     if has_alpha:
         return jnp.concatenate([degenerate, alpha], axis=-1)
     return degenerate
-
-
-# blend = jax.jit(blend) #, static_argnums=(2,))
-# cutout = jax.jit(cutout)
-# solarize = jax.jit(solarize)
-# solarize_add = jax.jit(solarize_add)
-# rgb_to_grayscale = jax.jit(rgb_to_grayscale)
-# grayscale_to_rgb = jax.jit(grayscale_to_rgb)
-# color = jax.jit(color) #, static_argnums=(1,))
-# contrast = jax.jit(contrast) #, static_argnums=(1,))
-# brightness = jax.jit(brightness) #, static_argnums=(1,))
-# posterize = jax.jit(posterize)
-# autocontrast = jax.jit(autocontrast)
-# sharpness = jax.jit(sharpness) #, static_argnums=(1,))
-# equalize = jax.jit(equalize)
-# invert = jax.jit(invert)

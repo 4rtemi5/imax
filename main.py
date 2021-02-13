@@ -23,22 +23,22 @@ def main():
     image2 = jnp.asarray(Image.open('tests/test.jpeg').convert('RGBA').rotate(90)).astype('uint8')
 
     images1 = jnp.tile(jnp.expand_dims(image1, 0), [64, 1, 1, 1])
-    num_layers = jnp.tile(jnp.expand_dims(1, (0, 1)), [64,1])
-    magnitudes = jnp.tile(jnp.expand_dims(10, (0, 1)), [64,1])
+    num_layers = jnp.tile(jnp.expand_dims(1, (0,)), [64])
+    magnitudes = jnp.tile(jnp.expand_dims(10, (0,)), [64])
 
     for _ in range(1000):
-        random_keys = random.split(random_key, 65)
-        random_key, split_keys = random_keys[0], random_keys[1:]
+        random_key, split_key = random.split(random_key, 2)
+        split_keys = random.split(split_key, 64)
         # split_keys = random.randint(split_keys[0], [64], minval=0, maxval=1000000)
         t0 = time()
 
-        for i in [images1, num_layers, magnitudes, split_keys]:
-            print(i.shape)
+        # for i in [images1, num_layers, magnitudes, split_keys]:
+        #     print(i.shape)
 
         transformed_image = vmap(randaugment.distort_image_with_randaugment)(images1,
-                                                                             num_layers=num_layers,
-                                                                             magnitude=magnitudes,
-                                                                             random_key=split_keys)
+                                                                       num_layers=num_layers,
+                                                                       magnitude=magnitudes,
+                                                                       random_key=split_keys)
         print(time() - t0)
         print()
 

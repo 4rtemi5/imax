@@ -137,15 +137,3 @@ def apply_transform(image,
                                    mask_value,
                                    intrinsic_matrix,
                                    depth)
-
-
-# # scale = jit(scale)
-# scale_3d = jit(scale_3d)
-# # shear = jit(shear)
-# shear_3d = jit(shear_3d)
-# # translate = jit(translate)
-# translate_3d = jit(translate_3d)
-# # rotate = jit(rotate)
-# # rotate90 = jit(rotate90)
-# rotate_3d = jit(rotate_3d)
-# flip = jit(flip)
