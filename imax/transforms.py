@@ -6,11 +6,22 @@ I = jnp.identity(4)
 
 
 @jax.jit
-def scale_3d(cx=1., cy=1., cz=1., c_=1.):
+def scale_3d(cx=1., cy=1., cz=1., c=1.):
+    """
+    Returns transformation matrix for 3d scaling.
+    Args:
+        cx: scaling factor in x-direction
+        cy: scaling factor in y-direction
+        cz: scaling factor in z-direction
+        c: scaling factor in all directions
+
+    Returns:
+        A 4x4 float32 transformation matrix.
+    """
     C = jnp.array([[1/cx,    0,    0,    0],
                    [   0, 1/cy,    0,    0],
                    [   0,    0, 1/cz,    0],
-                   [   0,    0,    0, 1/c_]], dtype='float32')
+                   [   0,    0,    0,  1/c]], dtype='float32')
     return C
 
 
@@ -21,6 +32,19 @@ def scale(x_factor=1.0, y_factor=1.0):
 
 @jax.jit
 def shear_3d(sxy=0., sxz=0., syx=0., syz=0., szx=0., szy=0.):
+    """
+    Returns transformation matrix for 3d shearing.
+    Args:
+        sxy:
+        sxz:
+        syx:
+        syz:
+        szx:
+        szy:
+
+    Returns:
+        A 4x4 float32 transformation matrix.
+    """
     S = jnp.array([[  1, sxy, sxz, 0],
                    [syx,   1, syz, 0],
                    [szx, szy,   1, 0],
@@ -35,6 +59,16 @@ def shear(horizontal=0., vertical=0.):
 
 @jax.jit
 def translate_3d(tx=0, ty=0, tz=0):
+    """
+
+    Args:
+        tx:
+        ty:
+        tz:
+
+    Returns:
+        A 4x4 float32 transformation matrix.
+    """
     D = jnp.array([[1, 0, 0, tx],
                    [0, 1, 0, ty],
                    [0, 0, 1, tz],

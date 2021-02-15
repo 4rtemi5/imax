@@ -1,14 +1,15 @@
-import jax.numpy as jnp
-from jax import jit, vmap, random  # , grad
-
 import random as orandom
+from time import time
 
+import jax
+import jax.numpy as jnp
+from jax import random
 from matplotlib import pyplot as plt
+from PIL import Image
+
 from imax import transforms
 from imax import color_transforms
 from imax import randaugment
-from PIL import Image
-from time import time
 
 
 def main():
@@ -23,31 +24,40 @@ def main():
     image2 = jnp.asarray(Image.open('tests/test.jpeg').convert('RGBA').rotate(90)).astype('uint8')
 
     images1 = jnp.tile(jnp.expand_dims(image1, 0), [64, 1, 1, 1])
-    num_layers = jnp.tile(jnp.expand_dims(1, (0,)), [64])
+    num_layers = jnp.tile(jnp.expand_dims(3, (0,)), [64])
     magnitudes = jnp.tile(jnp.expand_dims(10, (0,)), [64])
 
-    for _ in range(1000):
+    for _ in range(10):
         random_key, split_key = random.split(random_key, 2)
         split_keys = random.split(split_key, 64)
         # split_keys = random.randint(split_keys[0], [64], minval=0, maxval=1000000)
-        t0 = time()
+        t_0 = time()
 
         # for i in [images1, num_layers, magnitudes, split_keys]:
         #     print(i.shape)
 
-        transformed_image = vmap(randaugment.distort_image_with_randaugment)(images1,
-                                                                       num_layers=num_layers,
-                                                                       magnitude=magnitudes,
-                                                                       random_key=split_keys)
-        print(time() - t0)
+        transformed_image = randaugment.distort_image_with_randaugment(
+            image1,
+            num_layers=3,
+            magnitude=10,
+            random_key=split_key
+        )
+
+        # transformed_images = jax.vmap(randaugment.distort_image_with_randaugment)(
+        #     images1,
+        #     num_layers=num_layers,
+        #     magnitude=magnitudes,
+        #     random_key=split_keys
+        # )
+        print(time() - t_0)
         print()
 
-        # plt.imshow(transformed_image)
-        # plt.show()
-
+        plt.imshow(transformed_image)
+        plt.show()
+    #
     # images1 = jnp.tile(jnp.expand_dims(image1, 0), [64, 1, 1, 1])
     # images2 = jnp.tile(jnp.expand_dims(image2, 0), [64, 1, 1, 1])
-
+    #
     # cutout_mask = color_transforms.get_random_cutout_mask(random_key, image1.shape, (80, 80))
     #
     #
@@ -127,9 +137,6 @@ def main():
     #     plt.title(name)
     #     plt.show()
 
-
-
-
     # image = jnp.asarray(Image.open('tests/tests.jpeg').convert('RGBA')).astype('float32')
     # images = jnp.tile(jnp.expand_dims(image, 0), [64, 1, 1, 1])
     #
@@ -141,10 +148,11 @@ def main():
     # T = transforms.rotate(rz=1)(T)
     #
     # t0 = time()
-    # transformed_image = jit(transforms.apply_transforms)(image,
-    #                                                      T,
-    #                                                      mask_value=-1,  # jnp.array([0, 0, 0, 255])
-    #                                                      )
+    # transformed_image = jit(transforms.apply_transforms)(
+    #     image,
+    #     T,
+    #     mask_value=-1,  # jnp.array([0, 0, 0, 255])
+    # )
     # print(time() - t0)
     #
     # for _ in range(100):
@@ -170,17 +178,19 @@ def main():
     # times = []
     #
     # t0 = time()
-    # transformed_image = vmap(jit(transforms.apply_transforms))(images,
-    #                                                      Ts,
-    #                                                      mask_value=mask_values,  # jnp.array([0, 0, 0, 255])
-    #                                                      )
+    # transformed_image = vmap(jit(transforms.apply_transforms))(
+    #     images,
+    #     Ts,
+    #     mask_value=mask_values,  # jnp.array([0, 0, 0, 255])
+    # )
     # print(time() - t0)
     #
     # for _ in range(100):
     #     t0 = time()
-    #     transformed_image = vmap(jit(transforms.apply_transforms))(images,
-    #                                                          Ts,
-    #                                                          mask_value=mask_values)  # jnp.array([0, 0, 0, 255]))
+    #     transformed_image = vmap(jit(transforms.apply_transforms))(
+    #         images,
+    #         Ts,
+    #         mask_value=mask_values)  # jnp.array([0, 0, 0, 255]))
     #     times.append(time() - t0)
     #
     # print(jnp.mean(jnp.array(times)))

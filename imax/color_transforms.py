@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 from jax import lax, random
 import jax.numpy as jnp
@@ -58,41 +60,39 @@ def blend(image1, image2, factor):
     return apply_blend(image1, image2, factor)
 
 
-def get_random_cutout_mask(random_key, image_shape, max_mask_shape=(40, 40)):
+def get_random_cutout_mask(random_key, image_shape, max_mask_shape):
     # TODO: currently not jitable
     image_height = image_shape[0]
     image_width = image_shape[1]
-    mask_height = (max_mask_shape[0]//2).astype(int)
-    mask_width = (max_mask_shape[1]//2).astype(int)
+    mask_height = max_mask_shape
+    mask_width = max_mask_shape
 
     random_key, subkey = random.split(random_key)
-    pos_x = random.randint(subkey, shape=(), minval=0, maxval=image_width)#.item()
+    cutout_center_height = random.randint(subkey, shape=(), minval=0, maxval=image_width)
     random_key, subkey = random.split(random_key)
-    pos_y = random.uniform(subkey, shape=(), minval=0, maxval=image_height)#.item()
+    cutout_center_width = random.uniform(subkey, shape=(), minval=0, maxval=image_height)
     random_key, subkey = random.split(random_key)
-    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=mask_width)#.item()
+    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=mask_width)
     random_key, subkey = random.split(random_key)
-    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=mask_height)#.item()
-
-    cutout_center_height = pos_y
-    cutout_center_width = pos_x
+    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=mask_height)
 
     lower_pad = jnp.maximum(0, cutout_center_height - pad_size_y).astype('int32')
     upper_pad = jnp.maximum(0, image_height - cutout_center_height - pad_size_y).astype('int32')
     left_pad = jnp.maximum(0, cutout_center_width - pad_size_x).astype('int32')
     right_pad = jnp.maximum(0, image_width - cutout_center_width - pad_size_x).astype('int32')
 
-    # print(image_height, lower_pad, upper_pad)
+    mask_seed = jnp.ones([(image_height - (lower_pad + upper_pad)),
+                          (image_width - (left_pad + right_pad))])
 
-    cutout_shape = ((image_height - (lower_pad + upper_pad)),
-                    (image_width - (left_pad + right_pad)))
-    # print(cutout_shape)
-    padding_dims = jnp.array([[lower_pad, upper_pad], [left_pad, right_pad]], dtype='int32')
+    padding_dims = jnp.array([[lower_pad, upper_pad], [left_pad, right_pad]])
     mask = jnp.pad(
-        jnp.ones(cutout_shape, dtype='uint8'),
+        mask_seed,
         padding_dims, constant_values=0)
     mask = jnp.expand_dims(mask, -1)
     return mask.astype('bool')
+
+
+# get_random_cutout_mask = jax.jit(get_random_cutout_mask, static_argnums=(2,))
 
 
 @jax.jit
@@ -255,7 +255,7 @@ def posterize(image, bits):
 
     if has_alpha:
         return jnp.concatenate([degenerate, alpha], axis=-1)
-    return degenerate
+    return degenerate.astype('uint8')
 
 
 @jax.jit
