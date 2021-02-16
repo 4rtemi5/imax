@@ -34,10 +34,10 @@ DEFAULT_RANDAUGMENT_VALUES = {
     # ORDER NEEDS TO BE KEPT THE SAME AS IN level_to_arg
     'AutoContrast':  1.,            # 0
     'Equalize':      1.,            # 1
-    'Invert':        1.,            # 2
+    'Invert':        0.,            # 2
     'Posterize':     1.,            # 3
-    'Solarize':      1.,            # 4
-    'SolarizeAdd':   1.,            # 5
+    'Solarize':      0.,            # 4
+    'SolarizeAdd':   0.,            # 5
     'Color':         1.,            # 6
     'Contrast':      1.,            # 7
     'Brightness':    1.,            # 8

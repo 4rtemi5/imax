@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1 import ImageGrid
 from PIL import Image
 
 from imax import transforms
@@ -27,7 +28,9 @@ def main():
     num_layers = jnp.tile(jnp.expand_dims(3, (0,)), [64])
     magnitudes = jnp.tile(jnp.expand_dims(10, (0,)), [64])
 
-    for _ in range(10):
+    results = []
+
+    for _ in range(9):
         random_key, split_key = random.split(random_key, 2)
         split_keys = random.split(split_key, 64)
         # split_keys = random.randint(split_keys[0], [64], minval=0, maxval=1000000)
@@ -52,8 +55,20 @@ def main():
         print(time() - t_0)
         print()
 
-        plt.imshow(transformed_image)
-        plt.show()
+        results.append(transformed_image)
+
+    fig = plt.figure(figsize=(4., 4.))
+    grid = ImageGrid(fig, 111,  # similar to subplot(111)
+                     nrows_ncols=(3, 3),  # creates 2x2 grid of axes
+                     axes_pad=0.1,  # pad between axes in inch.
+                     )
+
+    for ax, im in zip(grid, results):
+        # Iterating over the grid returns the Axes.
+        ax.axis('off')
+        ax.imshow(im)
+    plt.tight_layout()
+    plt.show()
     #
     # images1 = jnp.tile(jnp.expand_dims(image1, 0), [64, 1, 1, 1])
     # images2 = jnp.tile(jnp.expand_dims(image2, 0), [64, 1, 1, 1])
