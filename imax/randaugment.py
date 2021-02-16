@@ -29,29 +29,62 @@ DEBUG = False
 # augmentation scheme.
 _MAX_LEVEL = 10.
 
-NAME_TO_FUNC = {
-    # returns tuple of (function, is_geometric_transform: bool)
-    'AutoContrast':  (color_transforms.autocontrast, False),  # 0
-    'Equalize': (color_transforms.equalize, False),           # 1
-    'Invert': (color_transforms.invert, False),               # 2
-    'Posterize': (color_transforms.posterize, False),         # 3
-    'Solarize': (color_transforms.solarize, False),           # 4
-    'SolarizeAdd': (color_transforms.solarize_add, False),    # 5
-    'Color': (color_transforms.color, False),                 # 6
-    'Contrast': (color_transforms.contrast, False),           # 7
-    'Brightness': (color_transforms.brightness, False),       # 8
-    'Sharpness': (color_transforms.sharpness, False),         # 9
-    'Rotate': (transforms.rotate, True),                      # 10
-    'ShearX': (transforms.shear, True),                       # 11
-    'ShearY': (transforms.shear, True),                       # 12
-    'TranslateX': (transforms.translate, True),               # 13
-    'TranslateY': (transforms.translate, True),               # 14
-    'Cutout': (color_transforms.cutout, False),               # 15
+DEFAULT_RANDAUGMENT_VALUES = {
+    # function_name -> probability
+    # ORDER NEEDS TO BE KEPT THE SAME AS IN level_to_arg
+    'AutoContrast':  1.,            # 0
+    'Equalize':      1.,            # 1
+    'Invert':        1.,            # 2
+    'Posterize':     1.,            # 3
+    'Solarize':      1.,            # 4
+    'SolarizeAdd':   1.,            # 5
+    'Color':         1.,            # 6
+    'Contrast':      1.,            # 7
+    'Brightness':    1.,            # 8
+    'Sharpness':     1.,            # 9
+    'Rotate':        1.,            # 10
+    'ShearX':        1.,            # 11
+    'ShearY':        1.,            # 12
+    'TranslateX':    1.,            # 13
+    'TranslateY':    1.,            # 14
+    'Cutout':        float(DEBUG),  # 15
 }
 
-AVAILABLE_OP_NAMES = tuple(NAME_TO_FUNC.keys())
-AVAILABLE_OPS = tuple([o[0] for o in NAME_TO_FUNC.values()])
-IS_GEOMETRIC = tuple([o[1] for o in NAME_TO_FUNC.values()])
+DEFAULT_OPS = jnp.array([i for i in range(len(DEFAULT_RANDAUGMENT_VALUES.keys()))])
+DEFAULT_PROBS = jnp.array([v for v in DEFAULT_RANDAUGMENT_VALUES.values()]) / \
+                sum(list(DEFAULT_RANDAUGMENT_VALUES.values()))
+
+
+def level_to_arg(cutout_val, translate_val, negate, level):
+    """
+    Translates the level to args for various functions.
+    Args:
+        cutout_val: value for cutout size of cutout function
+        translate_val: value for
+        negate:
+        level
+
+    Returns:
+
+    """
+    return tuple({
+        'AutoContrast': (),
+        'Equalize': (),
+        'Invert': (),
+        'Posterize': (5 - jnp.min(jnp.array([4, (level / _MAX_LEVEL * 4).astype('int32')])),),
+        'Solarize': (((level / _MAX_LEVEL) * 256).astype('int32'),),
+        'SolarizeAdd': (((level / _MAX_LEVEL) * 110).astype('int32'),),
+        'Color': _enhance_level_to_arg(level),
+        'Contrast': _enhance_level_to_arg(level),
+        'Brightness': _enhance_level_to_arg(level),
+        'Sharpness': _enhance_level_to_arg(level),
+        'Rotate': (_rotate_level_to_arg(level, negate),),
+        'ShearX': (_shear_level_to_arg(level, negate), 0),
+        'ShearY': (0, _shear_level_to_arg(level, negate)),
+        'TranslateX': (_translate_level_to_arg(translate_val, negate)[0], 0.),
+        'TranslateY': (0., _translate_level_to_arg(translate_val, negate)[1]),
+        'Cutout': (cutout_val,),   # Not working currently
+    }.values())
 
 
 def _shrink_level_to_arg(level):
@@ -101,43 +134,11 @@ def _translate_level_to_arg(translate_val, negate):
     return level
 
 
-def level_to_arg(cutout_val, translate_val, negate, level):
-    """
-    Translates the level to args for various functions.
-    Args:
-        cutout_val: value for cutout size of cutout function
-        translate_val: value for
-        negate:
-        level
-
-    Returns:
-
-    """
-    return tuple({
-        'AutoContrast': (),
-        'Equalize': (),
-        'Invert': (),
-        'Posterize': (5 - jnp.min(jnp.array([4, (level / _MAX_LEVEL * 4).astype('int32')])),),
-        'Solarize': (((level / _MAX_LEVEL) * 256).astype('int32'),),
-        'SolarizeAdd': (((level / _MAX_LEVEL) * 110).astype('int32'),),
-        'Color': _enhance_level_to_arg(level),
-        'Contrast': _enhance_level_to_arg(level),
-        'Brightness': _enhance_level_to_arg(level),
-        'Sharpness': _enhance_level_to_arg(level),
-        'Rotate': (_rotate_level_to_arg(level, negate),),
-        'ShearX': (_shear_level_to_arg(level, negate), 0),
-        'ShearY': (0, _shear_level_to_arg(level, negate)),
-        'TranslateX': (_translate_level_to_arg(translate_val, negate)[0], 0.),
-        'TranslateY': (0., _translate_level_to_arg(translate_val, negate)[1]),
-        'Cutout': (cutout_val,),   # Not working currently
-    }.values())
-
-
-def _parse_policy_info(name, prob, level, cutout_val, translate_val, negate):
-    """Return the function that corresponds to `name` and update `level` param."""
-    func, is_geometric_transform = NAME_TO_FUNC[name]
-    args = level_to_arg(cutout_val, translate_val, negate, level)[name]
-    return func, is_geometric_transform, prob, args
+# def _parse_policy_info(name, prob, level, cutout_val, translate_val, negate):
+#     """Return the function that corresponds to `name` and update `level` param."""
+#     func, is_geometric_transform = NAME_TO_FUNC[name]
+#     args = level_to_arg(cutout_val, translate_val, negate, level)[name]
+#     return func, is_geometric_transform, prob, args
 
 
 # def _apply_func_with_prob(func, image, args, prob):
@@ -365,12 +366,12 @@ def apply_ops(image, args, selected_op):
 
 # @jax.jit
 def randaugment_inner_for_loop(_, in_args):
-    (image, geometric_transforms, random_key, n_available_ops, is_geometric,
+    (image, geometric_transforms, random_key, available_ops, op_probs,
      magnitude, cutout_const, translate_const, join_transforms) = in_args
     random_keys = random.split(random_key, num=8)
     random_key = random_keys[0]  # keep for next iteration
-    op_to_select = random.randint(random_keys[1], [], minval=0, maxval=n_available_ops)
-    # prob = random.uniform(random_keys[2], [], minval=0.2, maxval=0.8)
+    op_to_select = random.choice(random_keys[1], available_ops, p=op_probs)
+    mask_value = random.randint(random_keys[2], [image.shape[-1]], minval=-1, maxval=256)
     random_magnitude = random.uniform(random_keys[3], [], minval=0., maxval=magnitude)
     # TODO: random shapes not supported in jit
     if DEBUG:
@@ -395,12 +396,12 @@ def randaugment_inner_for_loop(_, in_args):
     image, geometric_transform = jax.lax.cond(
         jnp.logical_or(join_transforms, jnp.all(jnp.not_equal(geometric_transform, jnp.identity(4)))),
         lambda op: (op[0], op[1]),
-        lambda op: (transforms.apply_transform(op[0], op[1], mask_value=0), jnp.identity(4)),  # TODO pass mask value
+        lambda op: (transforms.apply_transform(op[0], op[1], mask_value=mask_value), jnp.identity(4)),  # TODO pass mask value
         (image, geometric_transform)
     )
 
     geometric_transforms = jnp.matmul(geometric_transforms, geometric_transform)
-    return(image, geometric_transforms, random_key, n_available_ops, is_geometric,
+    return(image, geometric_transforms, random_key, available_ops, op_probs,
            magnitude, cutout_const, translate_const, join_transforms)
 
 
@@ -412,8 +413,8 @@ def distort_image_with_randaugment(image,
                                    cutout_const=40,
                                    translate_const=50.0,
                                    default_replace_value=None,
-                                   available_ops=AVAILABLE_OPS,
-                                   is_geometric=IS_GEOMETRIC,
+                                   available_ops=DEFAULT_OPS,
+                                   op_probs=DEFAULT_PROBS,
                                    join_transforms=False):
     """Applies the RandAugment policy to `image`.
 
@@ -433,7 +434,7 @@ def distort_image_with_randaugment(image,
         translate_const:
         default_replace_value:
         available_ops:
-        is_geometric:
+        op_probs:
         join_transforms:
 
     Returns:
@@ -442,7 +443,7 @@ def distort_image_with_randaugment(image,
 
     geometric_transforms = jnp.identity(4)
 
-    for_i_args = (image, geometric_transforms, random_key, len(available_ops) - int(not DEBUG), is_geometric,
+    for_i_args = (image, geometric_transforms, random_key, available_ops, op_probs,
                   magnitude, cutout_const, translate_const, join_transforms)
 
     # un-jitted
