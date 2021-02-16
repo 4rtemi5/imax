@@ -1,26 +1,11 @@
-from functools import partial
-
+# TODO: license
+# ==============================================================================
+"""
+Color Transforms in Jax.
+"""
 import jax
 from jax import lax, random
 import jax.numpy as jnp
-
-
-@jax.jit
-def apply_blend(image1, image2, factor):
-    image_dtype = image1.dtype
-    image1 = image1.astype('int32')
-    image2 = image2.astype('int32')
-
-    difference = image2 - image1
-    scaled = factor * difference
-
-    # Do addition in float.
-    temp = image1 + scaled
-
-    # Interpolate
-    # if 0.0 < factor < 1.0:
-    #     return temp.astype(image_dtype)  # Interpolation means we always stay within 0 and 255.
-    return jnp.clip(temp, 0.0, 255.0).astype(image_dtype)  # Extrapolate: We need to clip and then cast.
 
 
 @jax.jit
@@ -42,51 +27,51 @@ def blend(image1, image2, factor):
     Returns:
     A blended image Tensor of type uint8.
     """
+    image_dtype = image1.dtype
+    image1 = image1.astype('int32')
+    image2 = image2.astype('int32')
 
-    # output = lax.cond(
-    #     jnp.equal(factor, 0.0),
-    #     (),
-    #     lambda x: image1,
-    #     (),
-    #     lambda x: lax.cond(
-    #         jnp.equal(factor, 1),
-    #         (),
-    #         lambda y: image2,
-    #         (),
-    #         lambda y: apply_blend(image1, image2, factor)
-    #     )
-    # )
-    # return output
-    return apply_blend(image1, image2, factor)
+    difference = image2 - image1
+    scaled = factor * difference
+
+    # Do addition in float.
+    temp = image1 + scaled
+
+    return jnp.clip(temp, 0.0, 255.0).astype(image_dtype)
 
 
 def get_random_cutout_mask(random_key, image_shape, max_mask_shape):
-    # TODO: currently not jitable
-    image_height = image_shape[0]
-    image_width = image_shape[1]
-    mask_height = max_mask_shape
-    mask_width = max_mask_shape
+    """
 
+    Args:
+        random_key:
+        image_shape:
+        max_mask_shape:
+
+    Returns:
+
+    """
+    # TODO: currently not jitable
     random_key, subkey = random.split(random_key)
-    cutout_center_height = random.randint(subkey, shape=(), minval=0, maxval=image_width)
+    cutout_center_height = random.randint(subkey, shape=(), minval=0, maxval=image_shape[1])
     random_key, subkey = random.split(random_key)
-    cutout_center_width = random.uniform(subkey, shape=(), minval=0, maxval=image_height)
+    cutout_center_width = random.uniform(subkey, shape=(), minval=0, maxval=image_shape[0])
     random_key, subkey = random.split(random_key)
-    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=mask_width)
+    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=max_mask_shape)
     random_key, subkey = random.split(random_key)
-    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=mask_height)
+    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=max_mask_shape)
 
     lower_pad = jnp.maximum(0, cutout_center_height - pad_size_y).astype('int32')
-    upper_pad = jnp.maximum(0, image_height - cutout_center_height - pad_size_y).astype('int32')
+    upper_pad = jnp.maximum(0, image_shape[0] - cutout_center_height - pad_size_y).astype('int32')
     left_pad = jnp.maximum(0, cutout_center_width - pad_size_x).astype('int32')
-    right_pad = jnp.maximum(0, image_width - cutout_center_width - pad_size_x).astype('int32')
+    right_pad = jnp.maximum(0, image_shape[1] - cutout_center_width - pad_size_x).astype('int32')
 
-    mask_seed = jnp.ones([(image_height - (lower_pad + upper_pad)),
-                          (image_width - (left_pad + right_pad))])
+    mask = jnp.ones([(image_shape[0] - (lower_pad + upper_pad)),
+                     (image_shape[1] - (left_pad + right_pad))])
 
     padding_dims = jnp.array([[lower_pad, upper_pad], [left_pad, right_pad]])
     mask = jnp.pad(
-        mask_seed,
+        mask,
         padding_dims, constant_values=0)
     mask = jnp.expand_dims(mask, -1)
     return mask.astype('bool')
@@ -133,6 +118,15 @@ def cutout(image, mask, replace=0):
 
 @jax.jit
 def solarize(image, threshold=128):
+    """
+
+    Args:
+        image:
+        threshold:
+
+    Returns:
+
+    """
     # For each pixel in the image, select the pixel
     # if the value is less than the threshold.
     # Otherwise, subtract 255 from the pixel.
@@ -151,6 +145,16 @@ def solarize(image, threshold=128):
 
 @jax.jit
 def solarize_add(image, addition=0, threshold=128):
+    """
+
+    Args:
+        image:
+        addition:
+        threshold:
+
+    Returns:
+
+    """
     # For each pixel in the image less than threshold
     # we add 'addition' amount to it and then clip the
     # pixel value to be between 0 and 255. The value
@@ -172,17 +176,41 @@ def solarize_add(image, addition=0, threshold=128):
 
 @jax.jit
 def rgb_to_grayscale(rgb):
+    """
+
+    Args:
+        rgb:
+
+    Returns:
+
+    """
     return jnp.dot(rgb[..., :3], jnp.array([0.2989, 0.5870, 0.1140]).astype('uint8'))
 
 
 @jax.jit
 def grayscale_to_rgb(grayscale):
+    """
+
+    Args:
+        grayscale:
+
+    Returns:
+
+    """
     return jnp.stack((grayscale,) * 3, axis=-1)
 
 
 @jax.jit
 def color(image, factor):
-    """Equivalent of PIL Color."""
+    """
+    Equivalent of PIL Color.
+    Args:
+        image:
+        factor:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 
@@ -198,7 +226,15 @@ def color(image, factor):
 
 @jax.jit
 def contrast(image, factor):
-    """Equivalent of PIL Contrast."""
+    """
+    Equivalent of PIL Contrast.
+    Args:
+        image:
+        factor:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 
@@ -226,7 +262,15 @@ def contrast(image, factor):
 
 @jax.jit
 def brightness(image, factor):
-    """Equivalent of PIL Brightness."""
+    """
+    Equivalent of PIL Brightness.
+    Args:
+        image:
+        factor:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 
@@ -243,7 +287,15 @@ def brightness(image, factor):
 
 @jax.jit
 def posterize(image, bits):
-    """Equivalent of PIL Posterize."""
+    """
+    Equivalent of PIL Posterize.
+    Args:
+        image:
+        bits:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 
@@ -280,28 +332,28 @@ def autocontrast(image):
         # A possibly cheaper version can be done using cumsum/unique_with_counts
         # over the histogram values, rather than iterating over the entire image.
         # to compute mins and maxes.
-        lo = jnp.min(_image).astype('float32')
-        hi = jnp.max(_image).astype('float32')
+        low = jnp.min(_image).astype('float32')
+        high = jnp.max(_image).astype('float32')
 
         # Scale the image, making the lowest value 0 and the highest value 255.
         @jax.jit
         def _scale_values(_im):
-            scale = 255.0 / (hi - lo)
-            offset = -lo * scale
+            scale = 255.0 / (high - low)
+            offset = -low * scale
             _im = _im.astype('float32') * scale + offset
             _im = jnp.clip(_im, 0.0, 255.0)
             return _im.astype('uint8')
 
-        return jnp.where(hi > lo,
+        return jnp.where(high > low,
                          _scale_values(_image),
                          _image)
 
     # Assumes RGB for now.  Scales each channel independently
     # and then stacks the result.
-    s1 = _scale_channel(image[:, :, 0])
-    s2 = _scale_channel(image[:, :, 1])
-    s3 = _scale_channel(image[:, :, 2])
-    image = jnp.stack([s1, s2, s3], 2)
+    scaled_channel_1 = _scale_channel(image[:, :, 0])
+    scaled_channel_2 = _scale_channel(image[:, :, 1])
+    scaled_channel_3 = _scale_channel(image[:, :, 2])
+    image = jnp.stack([scaled_channel_1, scaled_channel_2, scaled_channel_3], 2)
 
     if has_alpha:
         return jnp.concatenate([image, alpha], axis=-1)
@@ -310,7 +362,15 @@ def autocontrast(image):
 
 @jax.jit
 def sharpness(image, factor):
-    """Implements Sharpness function from PIL using Jax ops."""
+    """
+    Implements Sharpness function from PIL using Jax ops.
+    Args:
+        image:
+        factor:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 
@@ -355,55 +415,63 @@ def sharpness(image, factor):
 
 
 @jax.jit
-def build_lut(histo, step):
-    # Compute the cumulative sum, shifting by step // 2
-    # and then normalization by step.
-    lut = (jnp.cumsum(histo) + (step // 2)) // step
-    # Shift lut, prepending with 0.
-    lut = jnp.concatenate([jnp.array([0]), lut[:-1]], 0)
-    # Clip the counts to be in range.  This is done
-    # in the C code for image.point.
-    return jnp.clip(lut, 0, 255)
-
-
-@jax.jit
-def scale_channel(im, test_agains_original=False):
-    """Scale the data in the channel to implement equalize."""
-    # im = im[:, :, c].astype('int32')
-    im = im.astype('int32')
-    # Compute the histogram of the image channel.
-    histo = jnp.histogram(im, bins=255, range=(0, 255))[0]
-
-    last_nonzero = jnp.argmax(histo[::-1] > 0)  # jnp.nonzero(histo)[0][-1]
-    step = (jnp.sum(histo) - jnp.take(histo[::-1], last_nonzero)) // 255
-
-    if test_agains_original:
-        # For the purposes of computing the step, filter out the nonzeros.
-        nonzero = jnp.nonzero(histo)
-        nonzero_histo = jnp.reshape(jnp.take(histo, nonzero), [-1])
-        original_step = (jnp.sum(nonzero_histo) - nonzero_histo[-1]) // 255
-        assert step == original_step
-        # print('histo', histo)
-        # print('nonzero', nonzero)
-        # print('nonzero_histo', nonzero_histo)
-        # print('step', step)
-
-    # If step is zero, return the original image.  Otherwise, build
-    # lut from the full histogram and step and then index from it.
-    return jnp.where(step == 0,
-                     im.astype('uint8'),
-                     jnp.take(build_lut(histo, step), im).astype('uint8'))
-
-
-@jax.jit
 def equalize(image):
-    """Implements Equalize function from PIL using Jax ops."""
+    """
+    Implements Equalize function from PIL using Jax ops.
+    Args:
+        image:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
 
-    s1 = scale_channel(image[:, :, 0])
-    s2 = scale_channel(image[:, :, 1])
-    s3 = scale_channel(image[:, :, 2])
-    degenerate = jnp.stack([s1, s2, s3], 2)
+    @jax.jit
+    def build_lut(histo, step):
+        # Compute the cumulative sum, shifting by step // 2
+        # and then normalization by step.
+        lut = (jnp.cumsum(histo) + (step // 2)) // step
+        # Shift lut, prepending with 0.
+        lut = jnp.concatenate([jnp.array([0]), lut[:-1]], 0)
+        # Clip the counts to be in range.  This is done
+        # in the C code for image.point.
+        return jnp.clip(lut, 0, 255)
+
+    @jax.jit
+    def scale_channel(img):
+        """
+        Scale the data in the channel to implement equalize.
+        Args:
+            img:
+
+        Returns:
+
+        """
+        # im = im[:, :, c].astype('int32')
+        img = img.astype('int32')
+        # Compute the histogram of the image channel.
+        histo = jnp.histogram(img, bins=255, range=(0, 255))[0]
+
+        last_nonzero = jnp.argmax(histo[::-1] > 0)  # jnp.nonzero(histo)[0][-1]
+        step = (jnp.sum(histo) - jnp.take(histo[::-1], last_nonzero)) // 255
+
+        # if test_agains_original:
+        #     # For the purposes of computing the step, filter out the nonzeros.
+        #     nonzero = jnp.nonzero(histo)
+        #     nonzero_histo = jnp.reshape(jnp.take(histo, nonzero), [-1])
+        #     original_step = (jnp.sum(nonzero_histo) - nonzero_histo[-1]) // 255
+        #     assert step == original_step
+
+        # If step is zero, return the original image.  Otherwise, build
+        # lut from the full histogram and step and then index from it.
+        return jnp.where(step == 0,
+                         img.astype('uint8'),
+                         jnp.take(build_lut(histo, step), img).astype('uint8'))
+
+    scaled_channel_1 = scale_channel(image[:, :, 0])
+    scaled_channel_2 = scale_channel(image[:, :, 1])
+    scaled_channel_3 = scale_channel(image[:, :, 2])
+    degenerate = jnp.stack([scaled_channel_1, scaled_channel_2, scaled_channel_3], 2)
 
     if has_alpha:
         return jnp.concatenate([degenerate, image[:, :, -1:]], axis=-1)
@@ -412,7 +480,14 @@ def equalize(image):
 
 @jax.jit
 def invert(image):
-    """Inverts the image pixels."""
+    """
+    Inverts the image pixels.
+    Args:
+        image:
+
+    Returns:
+
+    """
     has_alpha = image.shape[-1] == 4
     alpha = None
 

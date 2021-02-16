@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ==============================================================================
+
 """AutoAugment and RandAugment policies for enhanced image preprocessing.
 
 AutoAugment Reference: https://arxiv.org/abs/1805.09501

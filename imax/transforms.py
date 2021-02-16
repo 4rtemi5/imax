@@ -1,3 +1,7 @@
+# TODO: license
+"""
+Geometric Transforms in Jax.
+"""
 import jax
 import jax.numpy as jnp
 from imax.project import projective_inverse_warp
@@ -6,28 +10,37 @@ I = jnp.identity(4)
 
 
 @jax.jit
-def scale_3d(cx=1., cy=1., cz=1., c=1.):
+def scale_3d(scale_x=1., scale_y=1., scale_z=1., scale_xyz=1.):
     """
     Returns transformation matrix for 3d scaling.
     Args:
-        cx: scaling factor in x-direction
-        cy: scaling factor in y-direction
-        cz: scaling factor in z-direction
-        c: scaling factor in all directions
+        scale_x: scaling factor in x-direction
+        scale_y: scaling factor in y-direction
+        scale_z: scaling factor in z-direction
+        scale_xyz: scaling factor in all directions
 
     Returns:
         A 4x4 float32 transformation matrix.
     """
-    C = jnp.array([[1/cx,    0,    0,    0],
-                   [   0, 1/cy,    0,    0],
-                   [   0,    0, 1/cz,    0],
-                   [   0,    0,    0,  1/c]], dtype='float32')
-    return C
+    matrix = jnp.array([[1 / scale_x, 0, 0, 0],
+                        [0, 1 / scale_y, 0, 0],
+                        [0, 0, 1 / scale_z, 0],
+                        [0, 0, 0, 1 / scale_xyz]], dtype='float32')
+    return matrix
 
 
 @jax.jit
 def scale(x_factor=1.0, y_factor=1.0):
-    return scale_3d(cx=x_factor, cy=y_factor)
+    """
+    Returns transformation matrix for 2d scaling.
+    Args:
+        x_factor:
+        y_factor:
+
+    Returns:
+
+    """
+    return scale_3d(scale_x=x_factor, scale_y=y_factor)
 
 
 @jax.jit
@@ -45,104 +58,157 @@ def shear_3d(sxy=0., sxz=0., syx=0., syz=0., szx=0., szy=0.):
     Returns:
         A 4x4 float32 transformation matrix.
     """
-    S = jnp.array([[  1, sxy, sxz, 0],
-                   [syx,   1, syz, 0],
-                   [szx, szy,   1, 0],
-                   [  0,   0,   0, 1]], dtype='float32')
-    return S
+    matrix = jnp.array([[  1, sxy, sxz, 0],
+                        [syx,   1, syz, 0],
+                        [szx, szy,   1, 0],
+                        [  0,   0,   0, 1]], dtype='float32')
+    return matrix
 
 
 @jax.jit
 def shear(horizontal=0., vertical=0.):
+    """
+    Returns transformation matrix for 2d shearing.
+    Args:
+        horizontal:
+        vertical:
+
+    Returns:
+
+    """
     return shear_3d(sxy=horizontal, syx=vertical)
 
 
 @jax.jit
-def translate_3d(tx=0, ty=0, tz=0):
+def translate_3d(translate_x=0, translate_y=0, translate_z=0):
     """
-
+    Returns transformation matrix for 3d translation.
     Args:
-        tx:
-        ty:
-        tz:
+        translate_x:
+        translate_y:
+        translate_z:
 
     Returns:
         A 4x4 float32 transformation matrix.
     """
-    D = jnp.array([[1, 0, 0, tx],
-                   [0, 1, 0, ty],
-                   [0, 0, 1, tz],
-                   [0, 0, 0, 1]], dtype='float32')
-    return D
+    matrix = jnp.array([[1, 0, 0, translate_x],
+                        [0, 1, 0, translate_y],
+                        [0, 0, 1, translate_z],
+                        [0, 0, 0, 1]], dtype='float32')
+    return matrix
 
 
 @jax.jit
 def translate(horizontal, vertical):
-    return translate_3d(tx=horizontal, ty=vertical)
+    """
+    Returns transformation matrix for 2d translation.
+    Args:
+        horizontal:
+        vertical:
+
+    Returns:
+
+    """
+    return translate_3d(translate_x=horizontal, translate_y=vertical)
 
 
 @jax.jit
 def flip(horizontal=False, vertical=False):
-    rx = jnp.pi * vertical
-    ry = jnp.pi * horizontal
+    """
+    Returns transformation matrix for 2d flipping.
+    Args:
+        horizontal:
+        vertical:
 
-    rcx = jnp.cos(rx)
-    rsx = jnp.sin(rx)
-    rx = jnp.array([[1,    0,   0, 0],
-                    [0,  rcx, rsx, 0],
-                    [0, -rsx, rcx, 0],
-                    [0,    0,   0, 1]])
+    Returns:
 
-    rcy = jnp.cos(ry)
-    rsy = jnp.sin(ry)
-    ry = jnp.array([[rcy, 0, -rsy, 0],
-                    [  0, 1,    0, 0],
-                    [rsy, 0,  rcy, 0],
-                    [  0, 0,    0, 1]])
-    F = rx @ ry
-    return F
+    """
+    angle_x = jnp.pi * horizontal
+    angle_y = jnp.pi * vertical
+
+    rcx = jnp.cos(angle_x)
+    rsx = jnp.sin(angle_x)
+    rotation_y = jnp.array([[1,    0,   0, 0],
+                            [0,  rcx, rsx, 0],
+                            [0, -rsx, rcx, 0],
+                            [0,    0,   0, 1]])
+
+    rcy = jnp.cos(angle_y)
+    rsy = jnp.sin(angle_y)
+    rotation_x = jnp.array([[rcy, 0, -rsy, 0],
+                            [  0, 1,    0, 0],
+                            [rsy, 0,  rcy, 0],
+                            [  0, 0,    0, 1]])
+    matrix = rotation_x @ rotation_y
+    return matrix
 
 
 @jax.jit
 def rotate90(n=0):
+    """
+    Returns transformation matrix for 2d rotation of multiples of 90°.
+    Args:
+        n:
+
+    Returns:
+
+    """
     rcz = jnp.cos(jnp.pi/2 * n)
     rsz = jnp.sin(jnp.pi/2 * n)
-    R = jnp.array([[ rcz, rsz, 0, 0],
-                   [-rsz, rcz, 0, 0],
-                   [   0,   0, 1, 0],
-                   [   0,   0, 0, 1]])
-    return R
+    matrix = jnp.array([[ rcz, rsz, 0, 0],
+                        [-rsz, rcz, 0, 0],
+                        [   0,   0, 1, 0],
+                        [   0,   0, 0, 1]])
+    return matrix
 
 
 @jax.jit
-def rotate_3d(rx=0, ry=0, rz=0):
-    rcx = jnp.cos(rx)
-    rsx = jnp.sin(rx)
-    rx = jnp.array([[1,    0,   0, 0],
+def rotate_3d(angle_x=0, angle_y=0, angle_z=0):
+    """
+    Returns transformation matrix for 3d rotation.
+    Args:
+        angle_x:
+        angle_y:
+        angle_z:
+
+    Returns:
+
+    """
+    rcx = jnp.cos(angle_x)
+    rsx = jnp.sin(angle_x)
+    rotation_x = jnp.array([[1,    0,   0, 0],
                     [0,  rcx, rsx, 0],
                     [0, -rsx, rcx, 0],
                     [0,    0,   0, 1]])
 
-    rcy = jnp.cos(ry)
-    rsy = jnp.sin(ry)
-    ry = jnp.array([[rcy, 0, -rsy, 0],
+    rcy = jnp.cos(angle_y)
+    rsy = jnp.sin(angle_y)
+    rotation_y = jnp.array([[rcy, 0, -rsy, 0],
                     [  0, 1,    0, 0],
                     [rsy, 0,  rcy, 0],
                     [  0, 0,    0, 1]])
 
-    rcz = jnp.cos(rz)
-    rsz = jnp.sin(rz)
-    rz = jnp.array([[ rcz, rsz, 0, 0],
+    rcz = jnp.cos(angle_z)
+    rsz = jnp.sin(angle_z)
+    rotation_z = jnp.array([[ rcz, rsz, 0, 0],
                     [-rsz, rcz, 0, 0],
                     [   0,   0, 1, 0],
                     [   0,   0, 0, 1]])
-    R = rx @ ry @ rz
-    return R
+    matrix = rotation_x @ rotation_y @ rotation_z
+    return matrix
 
 
 @jax.jit
 def rotate(rad):
-    return rotate_3d(rz=rad)
+    """
+    Returns transformation matrix for 2d rotation around the z axis.
+    Args:
+        rad:
+
+    Returns:
+
+    """
+    return rotate_3d(angle_z=rad)
 
 
 @jax.jit
@@ -150,10 +216,24 @@ def apply_transform(image,
                     transform,
                     mask_value=-1,
                     depth=-1,
-                    intrinsic_matrix=-1):
+                    intrinsic_matrix=-1,
+                    bilinear=True):
+    """
+    Applies a 3d transformation to an image. Can deal with depth data and intrinsic matrices.
+    Args:
+        image:
+        transform:
+        mask_value:
+        depth:
+        intrinsic_matrix:
+        bilinear:
 
-    width = image.shape[-2]
-    height = image.shape[-3]
+    Returns:
+
+    """
+
+    width = image.shape[1]
+    height = image.shape[0]
 
     depth = jnp.where(jnp.any(depth >= 0),
                       depth,
@@ -161,8 +241,8 @@ def apply_transform(image,
 
     intrinsic_matrix = jnp.where(jnp.any(intrinsic_matrix >= 0),
                                  intrinsic_matrix,
-                                 jnp.array([[1, 0, width / 2],
-                                            [0, 1, height / 2],
+                                 jnp.array([[1, 0, (width - 1) / 2.],
+                                            [0, 1, (height - 1) / 2.],
                                             [0, 0, 1]],
                                            dtype='float32'))
 
@@ -170,4 +250,5 @@ def apply_transform(image,
                                    transform,
                                    mask_value,
                                    intrinsic_matrix,
-                                   depth)
+                                   depth,
+                                   bilinear=bilinear)

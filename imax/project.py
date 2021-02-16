@@ -233,7 +233,6 @@ def cam2pixel(cam_coords, proj):
 def meshgrid(height, width, is_homogeneous=True):
     """Construct a 2D meshgrid.
     Args:
-        batch: batch size
         height: height of the grid
         width: width of the grid
         is_homogeneous: whether to return in homogeneous coordinates
@@ -392,8 +391,8 @@ def bilinear_sampler(imgs, coords, mask_value):
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([0.5], dtype='float32')
 
-    coords_x_clipped = jnp.clip(coords_x, eps, x_max - eps)
-    coords_y_clipped = jnp.clip(coords_y, eps, y_max - eps)
+    coords_x_clipped = jnp.clip(coords_x, zero, x_max)
+    coords_y_clipped = jnp.clip(coords_y, zero, y_max)
 
     x0 = jnp.floor(coords_x_clipped)
     x1 = x0 + 1
@@ -411,10 +410,10 @@ def bilinear_sampler(imgs, coords, mask_value):
     # wt_y0 = (y1 - coords_y) * jnp.equal(y0, y0_safe).astype('float32')
     # wt_y1 = (coords_y - y0) * jnp.equal(y1, y1_safe).astype('float32')
 
-    wt_x0 = x1_safe - coords_x_clipped  # 1
-    wt_x1 = coords_x_clipped - x0_safe  # 0
-    wt_y0 = y1_safe - coords_y_clipped  # 1
-    wt_y1 = coords_y_clipped - y0_safe  # 0
+    wt_x0 = x1_safe - coords_x  # 1
+    wt_x1 = coords_x - x0_safe  # 0
+    wt_y0 = y1_safe - coords_y  # 1
+    wt_y1 = coords_y - y0_safe  # 0
 
     # indices in the flat image to sample from
     dim2 = jnp.array(inp_size[1], dtype='float32')
@@ -439,7 +438,7 @@ def bilinear_sampler(imgs, coords, mask_value):
     w10 = wt_x1 * wt_y0
     w11 = wt_x1 * wt_y1
 
-    output = w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11
+    output = jnp.round(w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11)
 
     return jnp.where(jnp.any(mask_value > 0),
                      jnp.where(
