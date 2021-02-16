@@ -50,8 +50,8 @@ DEFAULT_RANDAUGMENT_VALUES = {
     'Cutout':        float(DEBUG),  # 15
 }
 
-DEFAULT_OPS = jnp.array([i for i in range(len(DEFAULT_RANDAUGMENT_VALUES.keys()))])
-DEFAULT_PROBS = jnp.array([v for v in DEFAULT_RANDAUGMENT_VALUES.values()]) / \
+DEFAULT_OPS = jnp.array(list(range(len(DEFAULT_RANDAUGMENT_VALUES.keys()))))
+DEFAULT_PROBS = jnp.array(list(DEFAULT_RANDAUGMENT_VALUES.values())) / \
                 sum(list(DEFAULT_RANDAUGMENT_VALUES.values()))
 
 
@@ -97,7 +97,7 @@ def _shrink_level_to_arg(level):
 
 
 def _enhance_level_to_arg(level):
-    return (level / _MAX_LEVEL) * 1.8 + 0.1,
+    return [(level / _MAX_LEVEL) * 1.8 + 0.1]
 
 
 def _rotate_level_to_arg(level, negate):
@@ -260,112 +260,146 @@ def _translate_level_to_arg(translate_val, negate):
 
 # @jax.jit
 
-def apply_ops(image, args, selected_op):
+def _apply_ops(image, args, selected_op):
+    """
+    An abomination of a function to apply a chosen operation to an image.
+    Args:
+        image:
+        args:
+        selected_op:
+
+    Returns:
+
+    """
     geometric_transform = jnp.identity(4)
 
     image, geometric_transform = jax.lax.cond(
         selected_op == 0,
-        lambda op: (color_transforms.autocontrast(op[0], *op[1][0]), geometric_transform),
+        lambda op: (color_transforms.autocontrast(op[0], *op[1][0]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 1,
-        lambda op: (color_transforms.equalize(op[0], *op[1][1]), geometric_transform),
+        lambda op: (color_transforms.equalize(op[0], *op[1][1]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 2,
-        lambda op: (color_transforms.invert(op[0], *op[1][2]), geometric_transform),
+        lambda op: (color_transforms.invert(op[0], *op[1][2]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 3,
-        lambda op: (color_transforms.posterize(op[0], *op[1][3]).astype('uint8'), geometric_transform),
+        lambda op: (color_transforms.posterize(op[0], *op[1][3]).astype('uint8'),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 4,
-        lambda op: (color_transforms.solarize(op[0], *op[1][4]), geometric_transform),
+        lambda op: (color_transforms.solarize(op[0], *op[1][4]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 5,
-        lambda op: (color_transforms.solarize_add(op[0], *op[1][5]), geometric_transform),
+        lambda op: (color_transforms.solarize_add(op[0], *op[1][5]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 6,
-        lambda op: (color_transforms.color(op[0], *op[1][6]), geometric_transform),
+        lambda op: (color_transforms.color(op[0], *op[1][6]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 7,
-        lambda op: (color_transforms.contrast(op[0], *op[1][7]), geometric_transform),
+        lambda op: (color_transforms.contrast(op[0], *op[1][7]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 8,
-        lambda op: (color_transforms.brightness(op[0], *op[1][8]), geometric_transform),
+        lambda op: (color_transforms.brightness(op[0], *op[1][8]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 9,
-        lambda op: (color_transforms.sharpness(op[0], *op[1][9]), geometric_transform),
+        lambda op: (color_transforms.sharpness(op[0], *op[1][9]),
+                    geometric_transform),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 10,
-        lambda op: (op[0], jnp.matmul(geometric_transform, transforms.rotate(*op[1][10]))),
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.rotate(*op[1][10]))),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 11,
-        lambda op: (op[0], jnp.matmul(geometric_transform, transforms.shear(*op[1][11]))),
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.shear(*op[1][11]))),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 12,
-        lambda op: (op[0], jnp.matmul(geometric_transform, transforms.shear(*op[1][12]))),
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.shear(*op[1][12]))),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 13,
-        lambda op: (op[0], jnp.matmul(geometric_transform, transforms.translate(*op[1][13]))),
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.translate(*op[1][13]))),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
     image, geometric_transform = jax.lax.cond(
         selected_op == 14,
-        lambda op: (op[0], jnp.matmul(geometric_transform, transforms.translate(*op[1][14]))),
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.translate(*op[1][14]))),
         lambda op: (op[0], geometric_transform),
         (image, args)
     )
-    if DEBUG:
-        # currently not jittable
-        image, geometric_transform = jax.lax.cond(
-            selected_op == 15,
-            lambda op: (color_transforms.cutout(op[0], *op[1][15]), geometric_transform),
-            lambda op: (op[0], geometric_transform),
-            (image, args)
-        )
+    # currently not jittable
+    image, geometric_transform = jax.lax.cond(
+        selected_op == 15,
+        lambda op: (color_transforms.cutout(op[0], *op[1][15]),
+                    geometric_transform),
+        lambda op: (op[0], geometric_transform),
+        (image, args)
+    )
     return image, geometric_transform
 
 
 # @jax.jit
-def randaugment_inner_for_loop(_, in_args):
+def _randaugment_inner_for_loop(_, in_args):
+    """
+    Loop body for for randougment.
+    Args:
+        _:
+        in_args:
+
+    Returns:
+
+    """
     (image, geometric_transforms, random_key, available_ops, op_probs,
      magnitude, cutout_const, translate_const, join_transforms) = in_args
     random_keys = random.split(random_key, num=8)
@@ -373,7 +407,6 @@ def randaugment_inner_for_loop(_, in_args):
     op_to_select = random.choice(random_keys[1], available_ops, p=op_probs)
     mask_value = random.randint(random_keys[2], [image.shape[-1]], minval=-1, maxval=256)
     random_magnitude = random.uniform(random_keys[3], [], minval=0., maxval=magnitude)
-    # TODO: random shapes not supported in jit
     if DEBUG:
         cutout_mask = color_transforms.get_random_cutout_mask(
             random_keys[4],
@@ -391,12 +424,16 @@ def randaugment_inner_for_loop(_, in_args):
     if DEBUG:
         print(op_to_select, args[op_to_select])
 
-    image, geometric_transform = apply_ops(image, args, op_to_select)
+    image, geometric_transform = _apply_ops(image, args, op_to_select)
 
     image, geometric_transform = jax.lax.cond(
-        jnp.logical_or(join_transforms, jnp.all(jnp.not_equal(geometric_transform, jnp.identity(4)))),
+        jnp.logical_or(join_transforms, jnp.all(
+            jnp.not_equal(geometric_transform, jnp.identity(4)))),
         lambda op: (op[0], op[1]),
-        lambda op: (transforms.apply_transform(op[0], op[1], mask_value=mask_value), jnp.identity(4)),  # TODO pass mask value
+        lambda op: (transforms.apply_transform(op[0],
+                                               op[1],
+                                               mask_value=mask_value),
+                    jnp.identity(4)),
         (image, geometric_transform)
     )
 
@@ -405,7 +442,6 @@ def randaugment_inner_for_loop(_, in_args):
            magnitude, cutout_const, translate_const, join_transforms)
 
 
-# @jax.jit
 def distort_image_with_randaugment(image,
                                    num_layers,
                                    magnitude,
@@ -446,14 +482,11 @@ def distort_image_with_randaugment(image,
     for_i_args = (image, geometric_transforms, random_key, available_ops, op_probs,
                   magnitude, cutout_const, translate_const, join_transforms)
 
-    # un-jitted
-    if DEBUG:
+    if DEBUG:  # un-jitted
         for i in range(num_layers):
-            for_i_args = randaugment_inner_for_loop(i, for_i_args)
-
-    # jitted
-    else:
-        for_i_args = jax.lax.fori_loop(0, num_layers, randaugment_inner_for_loop, for_i_args)
+            for_i_args = _randaugment_inner_for_loop(i, for_i_args)
+    else:  # jitted
+        for_i_args = jax.lax.fori_loop(0, num_layers, _randaugment_inner_for_loop, for_i_args)
 
     image, geometric_transforms = for_i_args[0], for_i_args[1]
 
