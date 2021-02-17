@@ -36,8 +36,9 @@ jobs:
           python setup.py install
 
       # Tests with Tox
+      - name: Install Tox and any other packages
+        run: pip install tox
       - name: Run Tox
-        # Run tox using the version of Python in `PATH`
         run: tox -e py
 
       # Upload to TestPyPI
