@@ -1,3 +1,6 @@
+# Original Source:
+# https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py
+#
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,6 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# ==============================================================================
 
 """AutoAugment and RandAugment policies for enhanced image preprocessing.
 
@@ -61,8 +65,8 @@ def level_to_arg(cutout_val, translate_val, negate, level):
     Args:
         cutout_val: value for cutout size of cutout function
         translate_val: value for
-        negate:
-        level
+        negate: negate level
+        level: input level
 
     Returns:
 
@@ -89,6 +93,7 @@ def level_to_arg(cutout_val, translate_val, negate, level):
 
 def _shrink_level_to_arg(level):
     """Converts level to ratio by which we shrink the image content."""
+
     if level == 0:
         return 1.0  # if level is zero, do not shrink the image
     # Maximum shrinking ratio is 2.9.
@@ -133,132 +138,6 @@ def _translate_level_to_arg(translate_val, negate):
     )
     return level
 
-
-# def _parse_policy_info(name, prob, level, cutout_val, translate_val, negate):
-#     """Return the function that corresponds to `name` and update `level` param."""
-#     func, is_geometric_transform = NAME_TO_FUNC[name]
-#     args = level_to_arg(cutout_val, translate_val, negate, level)[name]
-#     return func, is_geometric_transform, prob, args
-
-
-# def _apply_func_with_prob(func, image, args, prob):
-#     """Apply `func` to image w/ `args` as input with probability `prob`."""
-#     assert isinstance(args, tuple)
-#
-#     # If prob is a function argument, then this randomness is being handled
-#     # inside the function, so make sure it is always called.
-#     # pytype:disable=wrong-arg-types
-#     if 'prob' in inspect.getargspec(func)[0]:
-#         prob = 1.0
-#     # pytype:enable=wrong-arg-types
-#
-#     # Apply the function with probability `prob`.
-#     should_apply_op = tf.cast(
-#         tf.floor(tf.random_uniform([], dtype=tf.float32) + prob), tf.bool)
-#     augmented_image = tf.cond(
-#         should_apply_op,
-#         lambda: func(image, *args),
-#         lambda: image)
-#     return augmented_image
-
-
-# def select_and_apply_random_policy(policies, image):
-#     """Select a random policy from `policies` and apply it to `image`."""
-#     policy_to_select = tf.random_uniform([], maxval=len(policies), dtype=tf.int32)
-#     # Note that using tf.case instead of tf.conds would result in significantly
-#     # larger graphs and would even break export for some larger policies.
-#     for (i, policy) in enumerate(policies):
-#         image = tf.cond(
-#             tf.equal(i, policy_to_select),
-#             lambda selected_policy=policy: selected_policy(image),
-#             lambda: image)
-#     return image
-
-
-# def build_and_apply_nas_policy(policies, image,
-#                                augmentation_hparams):
-#     """Build a policy from the given policies passed in and apply to image.
-#
-#   Args:
-#     policies: list of lists of tuples in the form `(func, prob, level)`, `func`
-#       is a string name of the augmentation function, `prob` is the probability
-#       of applying the `func` operation, `level` is the input argument for
-#       `func`.
-#     image: tf.Tensor that the resulting policy will be applied to.
-#     augmentation_hparams: Hparams associated with the NAS learned policy.
-#
-#   Returns:
-#     A version of image that now has data augmentation applied to it based on
-#     the `policies` pass into the function.
-#   """
-#     replace_value = [128, 128, 128]
-#
-#     # func is the string name of the augmentation function, prob is the
-#     # probability of applying the operation and level is the parameter associated
-#     # with the tf op.
-#
-#     # tf_policies are functions that take in an image and return an augmented
-#     # image.
-#     tf_policies = []
-#     for policy in policies:
-#         tf_policy = []
-#         # Link string name to the correct python function and make sure the correct
-#         # argument is passed into that function.
-#         for policy_info in policy:
-#             policy_info = list(policy_info) + [replace_value, augmentation_hparams]
-#
-#             tf_policy.append(_parse_policy_info(*policy_info))
-#
-#         # Now build the tf policy that will apply the augmentation procedue
-#         # on image.
-#         def make_final_policy(tf_policy_):
-#             def final_policy(image_):
-#                 for func, prob, args in tf_policy_:
-#                     image_ = _apply_func_with_prob(
-#                         func, image_, args, prob)
-#                 return image_
-#
-#             return final_policy
-#
-#         tf_policies.append(make_final_policy(tf_policy))
-#
-#     augmented_image = select_and_apply_random_policy(
-#         tf_policies, image)
-#     return augmented_image
-
-
-# def distort_image_with_autoaugment(image, augmentation_name):
-#     """Applies the AutoAugment policy to `image`.
-#
-#   AutoAugment is from the paper: https://arxiv.org/abs/1805.09501.
-#
-#   Args:
-#     image: `Tensor` of shape [height, width, 3] representing an image.
-#     augmentation_name: The name of the AutoAugment policy to use. The available
-#       options are `v0` and `tests`. `v0` is the policy used for
-#       all of the results in the paper and was found to achieve the best results
-#       on the COCO dataset. `v1`, `v2` and `v3` are additional good policies
-#       found on the COCO dataset that have slight variation in what operations
-#       were used during the search procedure along with how many operations are
-#       applied in parallel to a single image (2 vs 3).
-#
-#   Returns:
-#     A tuple containing the augmented versions of `image`.
-#   """
-#     available_policies = {'v0': policy_v0,
-#                           'tests': policy_vtest}
-#     if augmentation_name not in available_policies:
-#         raise ValueError('Invalid augmentation_name: {}'.format(augmentation_name))
-#
-#     policy = available_policies[augmentation_name]()
-#     # Hparams that will be used for AutoAugment.
-#     augmentation_hparams = contrib_training.HParams(
-#         cutout_const=100, translate_const=250)
-#
-#     return build_and_apply_nas_policy(policy, image, augmentation_hparams)
-
-
-# @jax.jit
 
 def _apply_ops(image, args, selected_op):
     """
@@ -390,15 +269,15 @@ def _apply_ops(image, args, selected_op):
 
 
 # @jax.jit
-def _randaugment_inner_for_loop(_, in_args):
+def _randaugment_inner_for_loop(i, in_args):
     """
     Loop body for for randougment.
     Args:
-        _:
-        in_args:
+        i: loop iteration
+        in_args: loop body arguments
 
     Returns:
-
+        updated loop arguments
     """
     (image, geometric_transforms, random_key, available_ops, op_probs,
      magnitude, cutout_const, translate_const, join_transforms) = in_args
@@ -466,12 +345,12 @@ def distort_image_with_randaugment(image,
           [5, 30].
         random_key: random key to do random stuff
         join_transforms: reduce multiple transforms to one. Much more efficient but simpler.
-        cutout_const:
-        translate_const:
-        default_replace_value:
-        available_ops:
-        op_probs:
-        join_transforms:
+        cutout_const: max cutout size int
+        translate_const: maximum translation amount int
+        default_replace_value: default replacement value for pixels outside of the image
+        available_ops: available operations
+        op_probs: probabilities of operations
+        join_transforms: apply transformations immediately or join them
 
     Returns:
         The augmented version of `image`.

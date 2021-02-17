@@ -1,4 +1,19 @@
-# TODO: license
+# Original Source:
+# https://github.com/tensorflow/tpu/blob/master/models/official/efficientnet/autoaugment.py
+#
+# Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # ==============================================================================
 """
 Color Transforms in Jax.
@@ -42,11 +57,11 @@ def blend(image1, image2, factor):
 
 def get_random_cutout_mask(random_key, image_shape, max_mask_shape):
     """
-
+    Creates a random cutout mask.
     Args:
-        random_key:
-        image_shape:
-        max_mask_shape:
+        random_key: jax.random key
+        image_shape: desired 2d mask shape
+        max_mask_shape: maximum cutout height/with
 
     Returns:
 
@@ -75,9 +90,6 @@ def get_random_cutout_mask(random_key, image_shape, max_mask_shape):
         padding_dims, constant_values=0)
     mask = jnp.expand_dims(mask, -1)
     return mask.astype('bool')
-
-
-# get_random_cutout_mask = jax.jit(get_random_cutout_mask, static_argnums=(2,))
 
 
 @jax.jit
@@ -119,13 +131,13 @@ def cutout(image, mask, replace=0):
 @jax.jit
 def solarize(image, threshold=128):
     """
-
+    Solarize augmentation.
     Args:
-        image:
-        threshold:
+        image: input image (uint8)
+        threshold: solarize threshold (int)
 
     Returns:
-
+        Augmented image.
     """
     # For each pixel in the image, select the pixel
     # if the value is less than the threshold.
@@ -148,9 +160,9 @@ def solarize_add(image, addition=0, threshold=128):
     """
 
     Args:
-        image:
-        addition:
-        threshold:
+        image: input image (uint8)
+        addition: addition value (int)
+        threshold: solarize threshold (int)
 
     Returns:
 
@@ -177,12 +189,12 @@ def solarize_add(image, addition=0, threshold=128):
 @jax.jit
 def rgb_to_grayscale(rgb):
     """
-
+    Transforms rgb image to grayscale.
     Args:
-        rgb:
+        rgb: rgb image
 
     Returns:
-
+        Grayscale image.
     """
     return jnp.dot(rgb[..., :3], jnp.array([0.2989, 0.5870, 0.1140]).astype('uint8'))
 
@@ -190,12 +202,12 @@ def rgb_to_grayscale(rgb):
 @jax.jit
 def grayscale_to_rgb(grayscale):
     """
-
+    Transforms grayscale image to three channel image.
     Args:
-        grayscale:
+        grayscale: single channes grayscale image.
 
     Returns:
-
+        Three channel image.
     """
     return jnp.stack((grayscale,) * 3, axis=-1)
 
@@ -205,11 +217,11 @@ def color(image, factor):
     """
     Equivalent of PIL Color.
     Args:
-        image:
-        factor:
+        image: image tensor
+        factor: float factor
 
     Returns:
-
+         Augmented image.
     """
     has_alpha = image.shape[-1] == 4
     alpha = None
@@ -229,11 +241,11 @@ def contrast(image, factor):
     """
     Equivalent of PIL Contrast.
     Args:
-        image:
-        factor:
+        image: image tensor
+        factor: float factor
 
     Returns:
-
+        Augmented image
     """
     has_alpha = image.shape[-1] == 4
     alpha = None
@@ -265,11 +277,11 @@ def brightness(image, factor):
     """
     Equivalent of PIL Brightness.
     Args:
-        image:
-        factor:
+        image: image tensor
+        factor: float factor
 
     Returns:
-
+        Augmented image.
     """
     has_alpha = image.shape[-1] == 4
     alpha = None
@@ -290,11 +302,11 @@ def posterize(image, bits):
     """
     Equivalent of PIL Posterize.
     Args:
-        image:
-        bits:
+        image: image tensor
+        bits: bits to shift
 
     Returns:
-
+        Augmented image.
     """
     has_alpha = image.shape[-1] == 4
     alpha = None
@@ -365,11 +377,11 @@ def sharpness(image, factor):
     """
     Implements Sharpness function from PIL using Jax ops.
     Args:
-        image:
-        factor:
+        image: image tensor
+        factor: float factor
 
     Returns:
-
+        Augmented image.
     """
     has_alpha = image.shape[-1] == 4
     alpha = None
@@ -419,10 +431,10 @@ def equalize(image):
     """
     Implements Equalize function from PIL using Jax ops.
     Args:
-        image:
+        image: image tensor
 
     Returns:
-
+        Augmented image.
     """
     has_alpha = image.shape[-1] == 4
 
@@ -442,10 +454,10 @@ def equalize(image):
         """
         Scale the data in the channel to implement equalize.
         Args:
-            img:
+            img: channel to scale.
 
         Returns:
-
+            scaled channel
         """
         # im = im[:, :, c].astype('int32')
         img = img.astype('int32')
@@ -483,10 +495,10 @@ def invert(image):
     """
     Inverts the image pixels.
     Args:
-        image:
+        image: image tensor
 
     Returns:
-
+        Augmented image.
     """
     has_alpha = image.shape[-1] == 4
     alpha = None

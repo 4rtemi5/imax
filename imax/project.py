@@ -1,190 +1,33 @@
+# Original Source:
+#  https://github.com/tinghuiz/SfMLearner/blob/master/utils.py
+#
+# MIT License
+#
+# Copyright (c) 2017 Tinghui Zhou
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+# ==============================================================================
+'''
+Image transformations with nearest neighbor and bilinear sampling.
+'''
 import jax
 import jax.numpy as jnp
-
-
-def getTransMatrix(trans_vec):
-    """
-    Convert a translation vector into a 4x4 transformation matrix
-    """
-    batch_size = trans_vec.shape[0]
-    # [B, 1, 1]
-    one = jnp.ones([batch_size, 1, 1], dtype='float32')
-    zero = jnp.zeros([batch_size, 1, 1], dtype='float32')
-
-    T = jnp.concatenate([
-        one, zero, zero, trans_vec[:, :, :1],
-        zero, one, zero, trans_vec[:, :, 1:2],
-        zero, zero, one, trans_vec[:, :, 2:3],
-        zero, zero, zero, one
-    ], axis=2)
-
-    T = jnp.reshape(T, [batch_size, 4, 4])
-
-    # T = tf.zeros([trans_vec.get_shape().as_list()[0],4,4],dtype=tf.float32)
-    # for i in range(4):
-    #     T[:,i,i] = 1
-    # trans_vec = tf.reshape(trans_vec, [-1,3,1])
-    # T[:,:3,3] = trans_vec
-    return T
-
-
-def rotFromAxisAngle(vec):
-    """
-    Convert axis angle into rotation matrix
-    not euler angle but Axis
-    :param vec: [B, 1, 3]
-    :return:
-    """
-    angle = jnp.linalg.norm(vec, ord=2, axis=2, keepdims=True)
-    axis = vec / (angle + 1e-7)
-
-    ca = jnp.cos(angle)
-    sa = jnp.sin(angle)
-
-    C = 1 - ca
-
-    x = axis[:, :, :1]
-    y = axis[:, :, 1:2]
-    z = axis[:, :, 2:3]
-
-    xs = x * sa
-    ys = y * sa
-    zs = z * sa
-    xC = x * C
-    yC = y * C
-    zC = z * C
-    xyC = x * yC
-    yzC = y * zC
-    zxC = z * xC
-
-    # [B, 1, 1]
-    one = jnp.ones_like(zxC, dtype='float32')
-    zero = jnp.zeros_like(zxC, dtype='float32')
-
-    rot_matrix = jnp.concatenate([
-        x * xC + ca, xyC - zs, zxC + ys, zero,
-        xyC + zs, y * yC + ca, yzC - xs, zero,
-        zxC - ys, yzC + xs, z * zC + ca, zero,
-        zero, zero, zero, one
-    ], axis=2)
-
-    rot_matrix = jnp.reshape(rot_matrix, [-1, 4, 4])
-
-    # rot_matrix = tf.zeros([vec.get_shape().as_list()[0],4,4], dtype= tf.float32)
-    #
-    # rot_matrix[:, 0, 0] = tf.squeeze()
-    # rot_matrix[:, 0, 1] = tf.squeeze()
-    # rot_matrix[:, 0, 2] = tf.squeeze()
-    # rot_matrix[:, 1, 0] = tf.squeeze()
-    # rot_matrix[:, 1, 1] = tf.squeeze()
-    # rot_matrix[:, 1, 2] = tf.squeeze()
-    # rot_matrix[:, 2, 0] = tf.squeeze(zxC - ys)
-    # rot_matrix[:, 2, 1] = tf.squeeze(yzC + xs)
-    # rot_matrix[:, 2, 2] = tf.squeeze(z * zC + ca)
-    # rot_matrix[:, 3, 3] = 1
-
-    return rot_matrix
-
-
-def pose_axis_angle_vec2mat(vec, invert=False):
-    """
-    Convert axis angle and translation into 4x4 matrix
-    :param vec: [B,1,6] with former 3 vec is axis angle
-    :return:
-    """
-    batch_size, _ = vec.shape
-
-    axisvec = vec[:, 0:3]
-    axisvec = jnp.reshape(axisvec, [batch_size, 1, 3])
-
-    translation = vec[:, 3:6]
-    translation = jnp.reshape(translation, [batch_size, 1, 3])
-
-    R = rotFromAxisAngle(axisvec)
-
-    if invert:
-        R = jnp.transpose(R, [0, 2, 1])
-        translation *= -1
-    t = getTransMatrix(translation)
-
-    if invert:
-        M = jnp.matmul(R, t)
-    else:
-        M = jnp.matmul(t, R)
-    return M
-
-
-def euler2mat(z, y, x):
-    """Converts euler angles to rotation matrix
-       TODO: remove the dimension for 'N' (deprecated for converting all source
-             poses altogether)
-    Reference: https://github.com/pulkitag/pycaffe-utils/blob/master/rot_utils.py#L174
-    Args:
-        z: rotation angle along z axis (in radians) -- size = [B, N]
-        y: rotation angle along y axis (in radians) -- size = [B, N]
-        x: rotation angle along x axis (in radians) -- size = [B, N]
-    Returns:
-        Rotation matrix corresponding to the euler angles -- size = [B, N, 3, 3]
-    """
-    B = jnp.shape(z)[0]
-    N = 1
-    z = jnp.clip(z, -jnp.pi, jnp.pi)
-    y = jnp.clip(y, -jnp.pi, jnp.pi)
-    x = jnp.clip(x, -jnp.pi, jnp.pi)
-
-    # Expand to B x N x 1 x 1
-    z = jnp.expand_dims(jnp.expand_dims(z, -1), -1)
-    y = jnp.expand_dims(jnp.expand_dims(y, -1), -1)
-    x = jnp.expand_dims(jnp.expand_dims(x, -1), -1)
-
-    zeros = jnp.zeros([B, N, 1, 1])
-    ones = jnp.ones([B, N, 1, 1])
-
-    cosz = jnp.cos(z)
-    sinz = jnp.sin(z)
-    rotz_1 = jnp.concatenate([cosz, -sinz, zeros], axis=3)
-    rotz_2 = jnp.concatenate([sinz, cosz, zeros], axis=3)
-    rotz_3 = jnp.concatenate([zeros, zeros, ones], axis=3)
-    zmat = jnp.concatenate([rotz_1, rotz_2, rotz_3], axis=2)
-
-    cosy = jnp.cos(y)
-    siny = jnp.sin(y)
-    roty_1 = jnp.concatenate([cosy, zeros, siny], axis=3)
-    roty_2 = jnp.concatenate([zeros, ones, zeros], axis=3)
-    roty_3 = jnp.concatenate([-siny, zeros, cosy], axis=3)
-    ymat = jnp.concatenate([roty_1, roty_2, roty_3], axis=2)
-
-    cosx = jnp.cos(x)
-    sinx = jnp.sin(x)
-    rotx_1 = jnp.concatenate([ones, zeros, zeros], axis=3)
-    rotx_2 = jnp.concatenate([zeros, cosx, -sinx], axis=3)
-    rotx_3 = jnp.concatenate([zeros, sinx, cosx], axis=3)
-    xmat = jnp.concatenate([rotx_1, rotx_2, rotx_3], axis=2)
-
-    rotMat = jnp.matmul(jnp.matmul(xmat, ymat), zmat)
-    return rotMat
-
-
-def pose_vec2mat(vec: jnp.array):
-    """Converts 6DoF parameters to transformation matrix
-    Args:
-        vec: 6DoF parameters in the order of tx, ty, tz, rx, ry, rz -- [B, 6]
-    Returns:
-        A transformation matrix -- [B, 4, 4]
-    """
-    batch_size, _ = vec.shape
-    translation = vec[:, 0:3]
-    translation = jnp.expand_dims(translation, -1)
-    rx = vec[:, 3:4]
-    ry = vec[:, 4:5]
-    rz = vec[:, 5:6]
-    rot_mat = euler2mat(rz, ry, rx)
-    rot_mat = jnp.squeeze(rot_mat, axis=1)
-    filler = jnp.array([[[0.0, 0.0, 0.0, 1.0]]])
-    filler = jnp.tile(filler, [batch_size, 1, 1])
-    transform_mat = jnp.concatenate([rot_mat, translation], axis=2)
-    transform_mat = jnp.concatenate([transform_mat, filler], axis=1)
-    return transform_mat
 
 
 def pixel2cam(depth, pixel_coords, intrinsics, is_homogeneous=True):
@@ -255,15 +98,18 @@ def meshgrid(height, width, is_homogeneous=True):
     return coords
 
 
-def _repeat(x, n_repeats):
-    rep = jnp.transpose(
-        jnp.expand_dims(jnp.ones(shape=[n_repeats]), 1), [1, 0])
-    rep = rep.astype('float32')
-    x = jnp.matmul(jnp.reshape(x, (-1, 1)), rep)
-    return jnp.reshape(x, [-1])
-
-
 def compute_mask(coords_x, coords_y, x_max, y_max):
+    """
+    Computes invalid pixel coordinates.
+    Args:
+        coords_x: flattened vector of x coordinates
+        coords_y: flattened vector of y coordinates
+        x_max: maximum x coordinate
+        y_max: maximum y coordinate
+
+    Returns:
+        vector of mask values
+    """
     x_not_underflow = coords_x >= 0.0
     y_not_underflow = coords_y >= 0.0
     x_not_overflow = coords_x < x_max
@@ -289,15 +135,16 @@ def projective_inverse_warp(img, transform, mask_value, intrinsics, depth, bilin
     """Inverse warp a source image to the target image plane based on projection.
     Args:
         img: the source image [batch, height_s, width_s, 3]
+        transform: 4x4 transformation matrix
+        mask_value: uint8 maks value of rgb/a mask value
         depth: depth map of the target image [batch, height_t, width_t]
-        pose: target to source camera transformation matrix [batch, 6], in the
-              order of rx, ry, rz, tx, ty, tz
         intrinsics: camera intrinsics [batch, 3, 3]
+        bilinear: bool use bilinear or nearest sampling.
     Returns:
         Source image inverse warped to the target image plane [batch, height_t,
         width_t, 3]
     """
-    height, width, channels = img.shape
+    height, width, _ = img.shape
     # Construct pixel grid coordinates
     pixel_coords = meshgrid(height, width)
     # Convert pixel coordinates to the camera frame
@@ -319,9 +166,20 @@ def projective_inverse_warp(img, transform, mask_value, intrinsics, depth, bilin
 
 
 def nearest_sampler(imgs, coords, mask_value):
+    """Construct a new image by nearest sampling from the input image.
+    Points falling outside the source image boundary have value of mask_value.
+    Args:
+        imgs: source image to be sampled from [batch, height_s, width_s, channels]
+        coords: coordinates of source pixels to sample from [batch, height_t,
+            width_t, 2]. height_t/width_t correspond to the dimensions of the output
+            image (don't need to be the same as height_s/width_s). The two channels
+            correspond to x and y coordinates respectively.
+        mask_value: value of points outside of image. -1 for edge sampling.
+        Returns:
+            A new sampled image [height_t, width_t, channels]
+    """
     coords_x, coords_y = jnp.split(coords, 2, axis=2)
     inp_size = imgs.shape
-    coord_size = coords.shape
     out_size = list(coords.shape)
     out_size[2] = imgs.shape[2]
 
@@ -333,8 +191,8 @@ def nearest_sampler(imgs, coords, mask_value):
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([0.5], dtype='float32')
 
-    coords_x_clipped = jnp.clip(coords_x, -eps, x_max + eps)
-    coords_y_clipped = jnp.clip(coords_y, -eps, y_max + eps)
+    coords_x_clipped = jnp.clip(coords_x, zero - eps, x_max + eps)
+    coords_y_clipped = jnp.clip(coords_y, zero - eps, y_max + eps)
 
     x0 = jnp.round(coords_x_clipped)
     y0 = jnp.round(coords_y_clipped)
@@ -371,12 +229,12 @@ def bilinear_sampler(imgs, coords, mask_value):
             width_t, 2]. height_t/width_t correspond to the dimensions of the output
             image (don't need to be the same as height_s/width_s). The two channels
             correspond to x and y coordinates respectively.
+        mask_value: value of points outside of image. -1 for edge sampling.
         Returns:
-            A new sampled image [batch, height_t, width_t, channels]
+            A new sampled image [height_t, width_t, channels]
     """
     coords_x, coords_y = jnp.split(coords, 2, axis=2)
     inp_size = imgs.shape
-    # coord_size = coords.shape
     out_size = list(coords.shape)
     out_size[2] = imgs.shape[2]
 

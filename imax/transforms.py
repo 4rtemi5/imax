@@ -1,4 +1,17 @@
-# TODO: license
+# Copyright 2019 Raphael Pisoni. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
 """
 Geometric Transforms in Jax.
 """
@@ -34,11 +47,11 @@ def scale(x_factor=1.0, y_factor=1.0):
     """
     Returns transformation matrix for 2d scaling.
     Args:
-        x_factor:
-        y_factor:
+        x_factor: scaling factor in x direction
+        y_factor: scaling factor in y direction
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     return scale_3d(scale_x=x_factor, scale_y=y_factor)
 
@@ -48,12 +61,12 @@ def shear_3d(sxy=0., sxz=0., syx=0., syz=0., szx=0., szy=0.):
     """
     Returns transformation matrix for 3d shearing.
     Args:
-        sxy:
-        sxz:
-        syx:
-        syz:
-        szx:
-        szy:
+        sxy: xy shearing factor
+        sxz: xz shearing factor
+        syx: yx shearing factor
+        syz: yz shearing factor
+        szx: zx shearing factor
+        szy: zy shearing factor
 
     Returns:
         A 4x4 float32 transformation matrix.
@@ -70,11 +83,11 @@ def shear(horizontal=0., vertical=0.):
     """
     Returns transformation matrix for 2d shearing.
     Args:
-        horizontal:
-        vertical:
+        horizontal: horizontal shearing factor
+        vertical: vertical shearing factor
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     return shear_3d(sxy=horizontal, syx=vertical)
 
@@ -84,9 +97,9 @@ def translate_3d(translate_x=0, translate_y=0, translate_z=0):
     """
     Returns transformation matrix for 3d translation.
     Args:
-        translate_x:
-        translate_y:
-        translate_z:
+        translate_x: x translation factor
+        translate_y: y translation factor
+        translate_z: z translation factor
 
     Returns:
         A 4x4 float32 transformation matrix.
@@ -103,11 +116,11 @@ def translate(horizontal, vertical):
     """
     Returns transformation matrix for 2d translation.
     Args:
-        horizontal:
-        vertical:
+        horizontal: horizontal translation factor
+        vertical: vertical translation factor
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     return translate_3d(translate_x=horizontal, translate_y=vertical)
 
@@ -117,11 +130,11 @@ def flip(horizontal=False, vertical=False):
     """
     Returns transformation matrix for 2d flipping.
     Args:
-        horizontal:
-        vertical:
+        horizontal: bool horizontal flipping
+        vertical: bool vertical flipping
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     angle_x = jnp.pi * horizontal
     angle_y = jnp.pi * vertical
@@ -148,10 +161,10 @@ def rotate90(n=0):
     """
     Returns transformation matrix for 2d rotation of multiples of 90°.
     Args:
-        n:
+        n: number of 90° rotations
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     rcz = jnp.cos(jnp.pi/2 * n)
     rsz = jnp.sin(jnp.pi/2 * n)
@@ -167,12 +180,12 @@ def rotate_3d(angle_x=0, angle_y=0, angle_z=0):
     """
     Returns transformation matrix for 3d rotation.
     Args:
-        angle_x:
-        angle_y:
-        angle_z:
+        angle_x: rotation angle around x axis in radians
+        angle_y: rotation angle around y axis in radians
+        angle_z: rotation angle around z axis in radians
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     rcx = jnp.cos(angle_x)
     rsx = jnp.sin(angle_x)
@@ -203,10 +216,10 @@ def rotate(rad):
     """
     Returns transformation matrix for 2d rotation around the z axis.
     Args:
-        rad:
+        rad: rotation angle in radians around z axis
 
     Returns:
-
+        A 4x4 float32 transformation matrix.
     """
     return rotate_3d(angle_z=rad)
 
@@ -221,15 +234,15 @@ def apply_transform(image,
     """
     Applies a 3d transformation to an image. Can deal with depth data and intrinsic matrices.
     Args:
-        image:
-        transform:
-        mask_value:
-        depth:
-        intrinsic_matrix:
-        bilinear:
+        image: image tensor
+        transform: 4x4 transformation matrix
+        mask_value: mask value for pixels outside of image. -1 for edge padding
+        depth: optional image depth
+        intrinsic_matrix: optional camera intrinsics
+        bilinear: bilinear or nearest sampling
 
     Returns:
-
+        Transformed image.
     """
 
     width = image.shape[1]
