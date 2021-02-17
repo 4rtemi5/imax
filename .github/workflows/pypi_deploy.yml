@@ -42,7 +42,7 @@ jobs:
       #   run: tox -e py
 
       # Upload to TestPyPI
-      - name: Build and Upload to TestPyPI
+      - name: Build and Upload to PyPI
         run: |
           python setup.py sdist bdist_wheel
           python -m twine upload dist/*
