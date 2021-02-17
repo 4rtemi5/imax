@@ -14,7 +14,7 @@ setuptools.setup(
     url="https://github.com/4rtemi5/imax",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: Apache 2.0 License",
+        "License :: OSI Approved :: Apache Software License v2.0",
         "Operating System :: OS Independent",
     ],
     packages=setuptools.find_packages(),
