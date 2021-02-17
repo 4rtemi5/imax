@@ -374,12 +374,9 @@ def bilinear_sampler(imgs, coords, mask_value):
         Returns:
             A new sampled image [batch, height_t, width_t, channels]
     """
-
-
-
     coords_x, coords_y = jnp.split(coords, 2, axis=2)
     inp_size = imgs.shape
-    coord_size = coords.shape
+    # coord_size = coords.shape
     out_size = list(coords.shape)
     out_size[2] = imgs.shape[2]
 
@@ -391,8 +388,8 @@ def bilinear_sampler(imgs, coords, mask_value):
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([0.5], dtype='float32')
 
-    coords_x_clipped = jnp.clip(coords_x, zero, x_max)
-    coords_y_clipped = jnp.clip(coords_y, zero, y_max)
+    coords_x_clipped = jnp.clip(coords_x, zero, x_max - eps)
+    coords_y_clipped = jnp.clip(coords_y, zero, y_max - eps)
 
     x0 = jnp.floor(coords_x_clipped)
     x1 = x0 + 1
@@ -404,7 +401,7 @@ def bilinear_sampler(imgs, coords, mask_value):
     x1_safe = jnp.clip(x1, zero, x_max)
     y1_safe = jnp.clip(y1, zero, y_max)
 
-    # # bilinear interp weights, with points outside the grid having weight 0
+    # bilinear interp weights, with points outside the grid having weight 0
     # wt_x0 = (x1 - coords_x) * jnp.equal(x0, x0_safe).astype('float32')
     # wt_x1 = (coords_x - x0) * jnp.equal(x1, x1_safe).astype('float32')
     # wt_y0 = (y1 - coords_y) * jnp.equal(y0, y0_safe).astype('float32')
@@ -438,9 +435,10 @@ def bilinear_sampler(imgs, coords, mask_value):
     w10 = wt_x1 * wt_y0
     w11 = wt_x1 * wt_y1
 
-    output = jnp.round(w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11)
+    output = jnp.clip(jnp.round(w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11), 0, 255)
 
-    return jnp.where(jnp.any(mask_value > 0),
+    # return output
+    return jnp.where(jnp.all(mask_value >= 0),
                      jnp.where(
                          compute_mask(coords_x, coords_y, x_max, y_max),
                          output,
