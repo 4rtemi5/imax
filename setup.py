@@ -17,6 +17,10 @@ setuptools.setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    packages=['jax', 'jaxlib'],
+    packages=setuptools.find_packages(),
     python_requires='>=3.6',
+    install_requires=[
+        'jax',
+        'jaxlib',
+    ],
 )
