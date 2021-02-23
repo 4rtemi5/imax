@@ -151,120 +151,41 @@ def _apply_ops(image, args, selected_op):
 
     """
     geometric_transform = jnp.identity(4)
-
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 0,
+    image, geometric_transform = jax.lax.switch(selected_op, [
         lambda op: (color_transforms.autocontrast(op[0], *op[1][0]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 1,
+                    geometric_transform),  # 0
         lambda op: (color_transforms.equalize(op[0], *op[1][1]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 2,
+                    geometric_transform),  # 1
         lambda op: (color_transforms.invert(op[0], *op[1][2]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 3,
+                    geometric_transform),  # 2
         lambda op: (color_transforms.posterize(op[0], *op[1][3]).astype('uint8'),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 4,
+                    geometric_transform),  # 3
         lambda op: (color_transforms.solarize(op[0], *op[1][4]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 5,
+                    geometric_transform),  # 4
         lambda op: (color_transforms.solarize_add(op[0], *op[1][5]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 6,
+                    geometric_transform),  # 5
         lambda op: (color_transforms.color(op[0], *op[1][6]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 7,
+                    geometric_transform),  # 6
         lambda op: (color_transforms.contrast(op[0], *op[1][7]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 8,
+                    geometric_transform),  # 7
         lambda op: (color_transforms.brightness(op[0], *op[1][8]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 9,
+                    geometric_transform),  # 8
         lambda op: (color_transforms.sharpness(op[0], *op[1][9]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 10,
+                    geometric_transform),  # 9
         lambda op: (op[0], jnp.matmul(geometric_transform,
-                                      transforms.rotate(*op[1][10]))),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 11,
+                                      transforms.rotate(*op[1][10]))),  # 10
         lambda op: (op[0], jnp.matmul(geometric_transform,
-                                      transforms.shear(*op[1][11]))),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 12,
+                                      transforms.shear(*op[1][11]))),  # 11
         lambda op: (op[0], jnp.matmul(geometric_transform,
-                                      transforms.shear(*op[1][12]))),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 13,
+                                      transforms.shear(*op[1][12]))),  # 12
         lambda op: (op[0], jnp.matmul(geometric_transform,
-                                      transforms.translate(*op[1][13]))),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 14,
+                                      transforms.translate(*op[1][13]))),  # 13
         lambda op: (op[0], jnp.matmul(geometric_transform,
-                                      transforms.translate(*op[1][14]))),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
-    # currently not jittable
-    image, geometric_transform = jax.lax.cond(
-        selected_op == 15,
+                                      transforms.translate(*op[1][14]))),  # 14
         lambda op: (color_transforms.cutout(op[0], *op[1][15]),
-                    geometric_transform),
-        lambda op: (op[0], geometric_transform),
-        (image, args)
-    )
+                    geometric_transform),  # 15
+    ], (image, args))
+
     return image, geometric_transform
 
 
