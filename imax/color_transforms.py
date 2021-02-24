@@ -123,9 +123,11 @@ def cutout(image, mask, replace=0):
     An image Tensor that is of type uint8.
     """
     has_alpha = image.shape[-1] == 4
-    replace_has_alpha = replace.shape[-1] == 4
-    alpha = None
     replace = replace.astype('uint8')
+    replace_has_alpha = not len(replace.shape) == 0 and replace.shape[-1] == 4
+    alpha = None
+    if len(replace.shape) == 0 or replace.shape[-1] == 1:
+        replace = jnp.tile(jnp.array(replace), (3,))
 
     if has_alpha:
         image, alpha = image[:, :, :3], image[:, :, -1:]
@@ -144,7 +146,8 @@ def cutout(image, mask, replace=0):
             alpha
         )
 
-    image = jnp.concatenate([image, alpha], axis=-1)
+    if has_alpha:
+        image = jnp.concatenate([image, alpha], axis=-1)
 
     return image
 
