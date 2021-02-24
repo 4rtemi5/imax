@@ -18,6 +18,8 @@
 """
 Color Transforms in Jax.
 """
+
+from functools import partial
 import jax
 from jax import lax, random
 import jax.numpy as jnp
@@ -55,41 +57,51 @@ def blend(image1, image2, factor):
     return jnp.clip(temp, 0.0, 255.0).astype(image_dtype)
 
 
-def get_random_cutout_mask(random_key, image_shape, max_mask_shape):
+@jax.jit
+def _expand_vertical(_, mask):
+    kernel = jnp.ones((1, 1, 3, 1))
+    mask = lax.conv(mask,  # lhs = NCHW image tensor
+                    kernel,  # rhs = OIHW conv kernel tensor
+                    (1, 1),  # window strides
+                    'SAME')
+    return mask
+
+
+@jax.jit
+def _expand_horizontal(_, mask):
+    kernel = jnp.ones((1, 1, 1, 3))
+    mask = lax.conv(mask,  # lhs = NCHW image tensor
+                    kernel,  # rhs = OIHW conv kernel tensor
+                    (1, 1),  # window strides
+                    'SAME')
+    return mask
+
+
+@partial(jax.jit, static_argnums=(1,))
+def get_random_cutout_mask(random_key, image_shape, mask_size):
     """
     Creates a random cutout mask.
     Args:
         random_key: jax.random key
         image_shape: desired 2d mask shape
-        max_mask_shape: maximum cutout height/with
+        mask_size: maximum cutout height/width
 
     Returns:
 
     """
-    # TODO: currently not jitable
-    random_key, subkey = random.split(random_key)
-    cutout_center_height = random.randint(subkey, shape=(), minval=0, maxval=image_shape[1])
-    random_key, subkey = random.split(random_key)
-    cutout_center_width = random.uniform(subkey, shape=(), minval=0, maxval=image_shape[0])
-    random_key, subkey = random.split(random_key)
-    pad_size_x = random.randint(subkey, shape=(), minval=0, maxval=max_mask_shape)
-    random_key, subkey = random.split(random_key)
-    pad_size_y = random.randint(subkey, shape=(), minval=0, maxval=max_mask_shape)
-
-    lower_pad = jnp.maximum(0, cutout_center_height - pad_size_y).astype('int32')
-    upper_pad = jnp.maximum(0, image_shape[0] - cutout_center_height - pad_size_y).astype('int32')
-    left_pad = jnp.maximum(0, cutout_center_width - pad_size_x).astype('int32')
-    right_pad = jnp.maximum(0, image_shape[1] - cutout_center_width - pad_size_x).astype('int32')
-
-    mask = jnp.ones([(image_shape[0] - (lower_pad + upper_pad)),
-                     (image_shape[1] - (left_pad + right_pad))])
-
-    padding_dims = jnp.array([[lower_pad, upper_pad], [left_pad, right_pad]])
-    mask = jnp.pad(
-        mask,
-        padding_dims, constant_values=0)
-    mask = jnp.expand_dims(mask, -1)
-    return mask.astype('bool')
+    # Workaround over unjitable approach
+    random_keys = random.split(random_key, 4)
+    random_key, subkeys = random_keys[0], random_keys[1:]
+    cutout_height = random.randint(subkeys[0], shape=(), minval=1, maxval=mask_size).astype('int32')
+    cutout_width = random.uniform(subkeys[1], shape=(), minval=1, maxval=mask_size).astype('int32')
+    mask = random.uniform(subkeys[2], (image_shape[0], image_shape[1]))
+    mask = (mask == jnp.max(mask)).astype('float32')
+    mask = jnp.expand_dims(mask, axis=(0, -1))
+    mask = jnp.transpose(mask, [0, 3, 1, 2])
+    mask = jax.lax.fori_loop(0, cutout_height - 1, _expand_vertical, mask)
+    mask = jax.lax.fori_loop(0, cutout_width - 1, _expand_horizontal, mask)
+    mask = jnp.transpose((mask > 0.0)[0], [1, 2, 0])
+    return mask
 
 
 @jax.jit
@@ -111,19 +123,28 @@ def cutout(image, mask, replace=0):
     An image Tensor that is of type uint8.
     """
     has_alpha = image.shape[-1] == 4
+    replace_has_alpha = replace.shape[-1] == 4
     alpha = None
+    replace = replace.astype('uint8')
 
     if has_alpha:
         image, alpha = image[:, :, :3], image[:, :, -1:]
 
-    mask = jnp.tile(mask, [1, 1, 3])
+    mask_3 = jnp.tile(mask, [1, 1, 3])
+
     image = jnp.where(
-        mask,
-        jnp.ones_like(image, dtype=image.dtype) * replace,
+        mask_3,
+        jnp.ones_like(image, dtype=image.dtype) * replace[:3],
         image)
 
-    if has_alpha:
-        image = jnp.concatenate([image, alpha], axis=-1)
+    if replace_has_alpha:
+        alpha = jnp.where(
+            mask,
+            jnp.ones_like(alpha, dtype=image.dtype) * replace[3:],
+            alpha
+        )
+
+    image = jnp.concatenate([image, alpha], axis=-1)
 
     return image
 

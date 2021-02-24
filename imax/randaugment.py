@@ -51,7 +51,9 @@ DEFAULT_RANDAUGMENT_VALUES = {
     'ShearY':        1.,            # 12
     'TranslateX':    1.,            # 13
     'TranslateY':    1.,            # 14
-    'Cutout':        float(DEBUG),  # 15
+    'FlipX':         1.,            # 15
+    'FlipY':         1.,            # 16
+    'Cutout':        1.,            # 17
 }
 
 DEFAULT_OPS = jnp.array(list(range(len(DEFAULT_RANDAUGMENT_VALUES.keys()))))
@@ -59,7 +61,7 @@ DEFAULT_PROBS = jnp.array(list(DEFAULT_RANDAUGMENT_VALUES.values())) / \
                 sum(list(DEFAULT_RANDAUGMENT_VALUES.values()))
 
 
-def level_to_arg(cutout_val, translate_val, negate, level):
+def level_to_arg(cutout_val, translate_val, negate, level, mask_value):
     """
     Translates the level to args for various functions.
     Args:
@@ -87,7 +89,9 @@ def level_to_arg(cutout_val, translate_val, negate, level):
         'ShearY': (0, _shear_level_to_arg(level, negate)),
         'TranslateX': (_translate_level_to_arg(translate_val, negate)[0], 0.),
         'TranslateY': (0., _translate_level_to_arg(translate_val, negate)[1]),
-        'Cutout': (cutout_val,),   # Not working currently
+        'FlipX': (True, False),
+        'FlipY': (False, True),
+        'Cutout': (cutout_val, mask_value),
     }.values())
 
 
@@ -182,15 +186,19 @@ def _apply_ops(image, args, selected_op):
                                       transforms.translate(*op[1][13]))),  # 13
         lambda op: (op[0], jnp.matmul(geometric_transform,
                                       transforms.translate(*op[1][14]))),  # 14
-        lambda op: (color_transforms.cutout(op[0], *op[1][15]),
-                    geometric_transform),  # 15
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.flip(*op[1][15]))),  # 15
+        lambda op: (op[0], jnp.matmul(geometric_transform,
+                                      transforms.flip(*op[1][16]))),  # 16
+        lambda op: (color_transforms.cutout(op[0], *op[1][17]),
+                    geometric_transform),  # 17
     ], (image, args))
 
     return image, geometric_transform
 
 
 # @jax.jit
-def _randaugment_inner_for_loop(i, in_args):
+def _randaugment_inner_for_loop(_, in_args):
     """
     Loop body for for randougment.
     Args:
@@ -201,25 +209,23 @@ def _randaugment_inner_for_loop(i, in_args):
         updated loop arguments
     """
     (image, geometric_transforms, random_key, available_ops, op_probs,
-     magnitude, cutout_const, translate_const, join_transforms) = in_args
+     magnitude, cutout_const, translate_const, join_transforms, default_replace_value) = in_args
     random_keys = random.split(random_key, num=8)
     random_key = random_keys[0]  # keep for next iteration
     op_to_select = random.choice(random_keys[1], available_ops, p=op_probs)
-    mask_value = random.randint(random_keys[2], [image.shape[-1]], minval=-1, maxval=256)
+    mask_value = default_replace_value or random.randint(random_keys[2], [image.shape[-1]],
+                                                         minval=-1, maxval=256)
     random_magnitude = random.uniform(random_keys[3], [], minval=0., maxval=magnitude)
-    if DEBUG:
-        cutout_mask = color_transforms.get_random_cutout_mask(
-            random_keys[4],
-            image.shape,
-            40)
-    else:
-        cutout_mask = jnp.zeros_like(image[:, :, :1]).astype('bool')
+    cutout_mask = color_transforms.get_random_cutout_mask(
+        random_keys[4],
+        image.shape,
+        cutout_const)
 
     translate_vals = (random.uniform(random_keys[5], [], minval=0.0, maxval=1.0) * translate_const,
                       random.uniform(random_keys[6], [], minval=0.0, maxval=1.0) * translate_const)
     negate = random.randint(random_keys[7], [], minval=0, maxval=2).astype('bool')
 
-    args = level_to_arg(cutout_mask, translate_vals, negate, random_magnitude)
+    args = level_to_arg(cutout_mask, translate_vals, negate, random_magnitude, mask_value)
 
     if DEBUG:
         print(op_to_select, args[op_to_select])
@@ -239,9 +245,10 @@ def _randaugment_inner_for_loop(i, in_args):
 
     geometric_transforms = jnp.matmul(geometric_transforms, geometric_transform)
     return(image, geometric_transforms, random_key, available_ops, op_probs,
-           magnitude, cutout_const, translate_const, join_transforms)
+           magnitude, cutout_const, translate_const, join_transforms, default_replace_value)
 
 
+@jax.jit
 def distort_image_with_randaugment(image,
                                    num_layers,
                                    magnitude,
@@ -280,7 +287,7 @@ def distort_image_with_randaugment(image,
     geometric_transforms = jnp.identity(4)
 
     for_i_args = (image, geometric_transforms, random_key, available_ops, op_probs,
-                  magnitude, cutout_const, translate_const, join_transforms)
+                  magnitude, cutout_const, translate_const, join_transforms, default_replace_value)
 
     if DEBUG:  # un-jitted
         for i in range(num_layers):
