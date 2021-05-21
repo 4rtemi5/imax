@@ -215,9 +215,12 @@ def _randaugment_inner_for_loop(_, in_args):
     random_keys = random.split(random_key, num=8)
     random_key = random_keys[0]  # keep for next iteration
     op_to_select = random.choice(random_keys[1], available_ops, p=op_probs)
-    mask_value = default_replace_value or random.randint(random_keys[2],
-                                                         [image.shape[-1]],
-                                                         minval=-1, maxval=256)
+    if default_replace_value is None:
+        mask_value = jnp.ones([image.shape[-1]]) * jnp.asarray(default_replace_value)
+    else:
+        mask_value = random.randint(random_keys[2],
+                                    [image.shape[-1]],
+                                    minval=-1, maxval=256)
     random_magnitude = random.uniform(random_keys[3], [], minval=0.,
                                       maxval=magnitude)
     cutout_mask = color_transforms.get_random_cutout_mask(
@@ -311,11 +314,13 @@ def distort_image_with_randaugment(image,
     image, geometric_transforms = for_i_args[0], for_i_args[1]
 
     if join_transforms:
-        replace_value = jnp.ones([image.shape[-1]]) * default_replace_value or \
-                        random.randint(random_key,
-                                       [image.shape[-1]],
-                                       minval=0,
-                                       maxval=256)
+        if default_replace_value is None:
+            replace_value = jnp.ones([image.shape[-1]]) * jnp.asarray(default_replace_value)
+        else:
+            replace_value = random.randint(random_key,
+                                           [image.shape[-1]],
+                                           minval=0,
+                                           maxval=256)
         image = transforms.apply_transform(image, geometric_transforms,
                                            mask_value=replace_value)
 
