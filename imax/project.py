@@ -58,7 +58,7 @@ def cam2pixel(cam_coords, proj):
         cam_coords: [batch, 4, height, width]
         proj: [batch, 4, 4]
     Returns:
-        Pixel coordinates projected from the camera frame [batch, height, width, 2]
+        Pixel coordinates projected from the camera frame [b, h, w, 2]
     """
     _, height, width = cam_coords.shape
     cam_coords = jnp.reshape(cam_coords, [4, -1])
@@ -131,8 +131,10 @@ def compute_mask(coords_x, coords_y, x_max, y_max):
     return mask
 
 
-def projective_inverse_warp(img, transform, mask_value, intrinsics, depth, bilinear=True):
-    """Inverse warp a source image to the target image plane based on projection.
+def projective_inverse_warp(img, transform, mask_value,
+                            intrinsics, depth, bilinear=True):
+    """
+    Inverse warp a source image to the target image plane based on projection.
     Args:
         img: the source image [batch, height_s, width_s, 3]
         transform: 4x4 transformation matrix
@@ -169,11 +171,11 @@ def nearest_sampler(imgs, coords, mask_value):
     """Construct a new image by nearest sampling from the input image.
     Points falling outside the source image boundary have value of mask_value.
     Args:
-        imgs: source image to be sampled from [batch, height_s, width_s, channels]
-        coords: coordinates of source pixels to sample from [batch, height_t,
-            width_t, 2]. height_t/width_t correspond to the dimensions of the output
-            image (don't need to be the same as height_s/width_s). The two channels
-            correspond to x and y coordinates respectively.
+        imgs: source image to be sampled from [b, h, w, c]
+        coords: coordinates of source pixels to sample from [b, h, w, 2].
+            height_t/width_t correspond to the dimensions of the output
+            image (don't need to be the same as height_s/width_s).
+            The two channels correspond to x and y coordinates respectively.
         mask_value: value of points outside of image. -1 for edge sampling.
         Returns:
             A new sampled image [height_t, width_t, channels]
@@ -209,26 +211,31 @@ def nearest_sampler(imgs, coords, mask_value):
     # sample from imgs
     imgs_flat = jnp.reshape(imgs, [-1, inp_size[2]])
     imgs_flat = imgs_flat.astype('float32')
-    output = jnp.reshape(jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
+    output = jnp.reshape(
+        jnp.take(imgs_flat, idx00.astype('int32'), axis=0),
+        out_size
+    )
 
-    return jnp.where(jnp.any(mask_value > 0),
-                     jnp.where(
-                         compute_mask(coords_x, coords_y, x_max, y_max),
-                         output,
-                         jnp.ones_like(output) * jnp.reshape(jnp.array(mask_value), [1, 1, -1])
-                     ),
-                     output)
+    return jnp.where(
+        jnp.any(mask_value > 0),
+        jnp.where(
+            compute_mask(coords_x, coords_y, x_max, y_max),
+            output,
+            jnp.ones_like(output) *
+            jnp.reshape(jnp.array(mask_value), [1, 1, -1])
+        ),
+        output)
 
 
 def bilinear_sampler(imgs, coords, mask_value):
     """Construct a new image by bilinear sampling from the input image.
     Points falling outside the source image boundary have value of mask_value.
     Args:
-        imgs: source image to be sampled from [batch, height_s, width_s, channels]
-        coords: coordinates of source pixels to sample from [batch, height_t,
-            width_t, 2]. height_t/width_t correspond to the dimensions of the output
-            image (don't need to be the same as height_s/width_s). The two channels
-            correspond to x and y coordinates respectively.
+        imgs: source image to be sampled from [b, h, w, c]
+        coords: coordinates of source pixels to sample from [b, h, w, 2].
+            height_t/width_t correspond to the dimensions of the output
+            image (don't need to be the same as height_s/width_s).
+            The two channels correspond to x and y coordinates respectively.
         mask_value: value of points outside of image. -1 for edge sampling.
         Returns:
             A new sampled image [height_t, width_t, channels]
@@ -283,23 +290,28 @@ def bilinear_sampler(imgs, coords, mask_value):
     # sample from imgs
     imgs_flat = jnp.reshape(imgs, [-1, inp_size[2]])
     imgs_flat = imgs_flat.astype('float32')
-    im00 = jnp.reshape(jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
-    im01 = jnp.reshape(jnp.take(imgs_flat, idx01.astype('int32'), axis=0), out_size)
-    im10 = jnp.reshape(jnp.take(imgs_flat, idx10.astype('int32'), axis=0), out_size)
-    im11 = jnp.reshape(jnp.take(imgs_flat, idx11.astype('int32'), axis=0), out_size)
+    im00 = jnp.reshape(
+        jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
+    im01 = jnp.reshape(
+        jnp.take(imgs_flat, idx01.astype('int32'), axis=0), out_size)
+    im10 = jnp.reshape(
+        jnp.take(imgs_flat, idx10.astype('int32'), axis=0), out_size)
+    im11 = jnp.reshape(
+        jnp.take(imgs_flat, idx11.astype('int32'), axis=0), out_size)
 
     w00 = wt_x0 * wt_y0
     w01 = wt_x0 * wt_y1
     w10 = wt_x1 * wt_y0
     w11 = wt_x1 * wt_y1
 
-    output = jnp.clip(jnp.round(w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11), 0, 255)
+    output = jnp.clip(jnp.round(w00 * im00 + w01 * im01 + w10 * im10 +
+                                w11 * im11), 0, 255)
 
-    # return output
     return jnp.where(jnp.all(mask_value >= 0),
                      jnp.where(
                          compute_mask(coords_x, coords_y, x_max, y_max),
                          output,
-                         jnp.ones_like(output) * jnp.reshape(jnp.array(mask_value), [1, 1, -1])
+                         jnp.ones_like(output) *
+                         jnp.reshape(jnp.array(mask_value), [1, 1, -1])
                      ),
                      output)

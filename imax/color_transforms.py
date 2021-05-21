@@ -89,11 +89,14 @@ def get_random_cutout_mask(random_key, image_shape, mask_size):
     Returns:
 
     """
-    # Workaround over unjitable approach
+    # Workaround over unjitable approach of
+    # creating random mask and padding it to size
     random_keys = random.split(random_key, 4)
     random_key, subkeys = random_keys[0], random_keys[1:]
-    cutout_height = random.randint(subkeys[0], shape=(), minval=1, maxval=mask_size).astype('int32')
-    cutout_width = random.uniform(subkeys[1], shape=(), minval=1, maxval=mask_size).astype('int32')
+    cutout_height = random.randint(subkeys[0], shape=(), minval=1,
+                                   maxval=(mask_size - 1) // 2).astype('int32')
+    cutout_width = random.uniform(subkeys[1], shape=(), minval=1,
+                                  maxval=(mask_size - 1) // 2).astype('int32')
     mask = random.uniform(subkeys[2], (image_shape[0], image_shape[1]))
     mask = (mask == jnp.max(mask)).astype('float32')
     mask = jnp.expand_dims(mask, axis=(0, -1))
@@ -220,7 +223,8 @@ def rgb_to_grayscale(rgb):
     Returns:
         Grayscale image.
     """
-    return jnp.dot(rgb[..., :3], jnp.array([0.2989, 0.5870, 0.1140]).astype('uint8'))
+    return jnp.dot(rgb[..., :3],
+                   jnp.array([0.2989, 0.5870, 0.1140]).astype('uint8'))
 
 
 @jax.jit
@@ -338,7 +342,7 @@ def posterize(image, bits):
     if has_alpha:
         image, alpha = image[:, :, :3], image[:, :, -1:]
 
-    shift = 8 - bits
+    shift = 8 - bits.astype('int32')
     degenerate = jnp.left_shift(jnp.right_shift(image, shift), shift)
 
     if has_alpha:
@@ -363,26 +367,27 @@ def autocontrast(image):
         image, alpha = image[:, :, :3], image[:, :, -1:]
 
     @jax.jit
-    def _scale_channel(_image):
+    def _scale_channel(img):
         """Scale the 2D image using the autocontrast rule."""
-        # A possibly cheaper version can be done using cumsum/unique_with_counts
-        # over the histogram values, rather than iterating over the entire image.
+        # A possibly cheaper version can be done using
+        # cumsum/unique_with_counts over the histogram
+        # values, rather than iterating over the entire image.
         # to compute mins and maxes.
-        low = jnp.min(_image).astype('float32')
-        high = jnp.max(_image).astype('float32')
+        low = jnp.min(img).astype('float32')
+        high = jnp.max(img).astype('float32')
 
         # Scale the image, making the lowest value 0 and the highest value 255.
         @jax.jit
-        def _scale_values(_im):
+        def _scale_values(im):
             scale = 255.0 / (high - low)
             offset = -low * scale
-            _im = _im.astype('float32') * scale + offset
-            _im = jnp.clip(_im, 0.0, 255.0)
-            return _im.astype('uint8')
+            im = im.astype('float32') * scale + offset
+            im = jnp.clip(im, 0.0, 255.0)
+            return im.astype('uint8')
 
         return jnp.where(high > low,
-                         _scale_values(_image),
-                         _image)
+                         _scale_values(img),
+                         img)
 
     # Assumes RGB for now.  Scales each channel independently
     # and then stacks the result.
@@ -423,9 +428,7 @@ def sharpness(image, factor):
                         [1, 1, 1]],
                        dtype='float32') / 13.
     kernel = jnp.reshape(kernel, (3, 3, 1, 1))
-    # Tile across channel dimension.
     kernel = jnp.tile(kernel, [1, 1, 1, 3])
-    # degenerate = tf.nn.depthwise_conv2d(image, kernel, strides, padding='VALID', rate=[1, 1])
     degenerate = lax.conv_general_dilated(
         jnp.transpose(image, [0, 3, 1, 2]),    # lhs = NCHW image tensor
         jnp.transpose(kernel, [3, 2, 0, 1]),   # rhs = OIHW conv kernel tensor
@@ -491,13 +494,6 @@ def equalize(image):
         last_nonzero = jnp.argmax(histo[::-1] > 0)  # jnp.nonzero(histo)[0][-1]
         step = (jnp.sum(histo) - jnp.take(histo[::-1], last_nonzero)) // 255
 
-        # if test_agains_original:
-        #     # For the purposes of computing the step, filter out the nonzeros.
-        #     nonzero = jnp.nonzero(histo)
-        #     nonzero_histo = jnp.reshape(jnp.take(histo, nonzero), [-1])
-        #     original_step = (jnp.sum(nonzero_histo) - nonzero_histo[-1]) // 255
-        #     assert step == original_step
-
         # If step is zero, return the original image.  Otherwise, build
         # lut from the full histogram and step and then index from it.
         return jnp.where(step == 0,
@@ -507,7 +503,9 @@ def equalize(image):
     scaled_channel_1 = scale_channel(image[:, :, 0])
     scaled_channel_2 = scale_channel(image[:, :, 1])
     scaled_channel_3 = scale_channel(image[:, :, 2])
-    degenerate = jnp.stack([scaled_channel_1, scaled_channel_2, scaled_channel_3], 2)
+    degenerate = jnp.stack([scaled_channel_1,
+                            scaled_channel_2,
+                            scaled_channel_3], 2)
 
     if has_alpha:
         return jnp.concatenate([degenerate, image[:, :, -1:]], axis=-1)

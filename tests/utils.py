@@ -8,7 +8,8 @@ def compare(inputs, targets, outputs):
             outputs
         ))
     except AssertionError as ex:
-        for k, v in zip(['inputs', 'outputs', 'target'], [inputs, outputs, targets]):
+        for k, v in zip(['inputs', 'outputs', 'target'],
+                        [inputs, outputs, targets]):
             print(k)
             print(v)
             print()

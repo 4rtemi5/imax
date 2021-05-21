@@ -77,7 +77,8 @@ def level_to_arg(cutout_val, translate_val, negate, level, mask_value):
         'AutoContrast': (),
         'Equalize': (),
         'Invert': (),
-        'Posterize': (5 - jnp.min(jnp.array([4, (level / _MAX_LEVEL * 4).astype('int32')])),),
+        'Posterize': (5 - jnp.min(jnp.array(
+            [4, (level / _MAX_LEVEL * 4).astype('int32')])),),
         'Solarize': (((level / _MAX_LEVEL) * 256).astype('int32'),),
         'SolarizeAdd': (((level / _MAX_LEVEL) * 110).astype('int32'),),
         'Color': _enhance_level_to_arg(level),
@@ -162,7 +163,7 @@ def _apply_ops(image, args, selected_op):
                     geometric_transform),  # 1
         lambda op: (color_transforms.invert(op[0], *op[1][2]),
                     geometric_transform),  # 2
-        lambda op: (color_transforms.posterize(op[0], *op[1][3]).astype('uint8'),
+        lambda op: (color_transforms.posterize(op[0], *op[1][3]),
                     geometric_transform),  # 3
         lambda op: (color_transforms.solarize(op[0], *op[1][4]),
                     geometric_transform),  # 4
@@ -209,23 +210,30 @@ def _randaugment_inner_for_loop(_, in_args):
         updated loop arguments
     """
     (image, geometric_transforms, random_key, available_ops, op_probs,
-     magnitude, cutout_const, translate_const, join_transforms, default_replace_value) = in_args
+     magnitude, cutout_const, translate_const, join_transforms,
+     default_replace_value) = in_args
     random_keys = random.split(random_key, num=8)
     random_key = random_keys[0]  # keep for next iteration
     op_to_select = random.choice(random_keys[1], available_ops, p=op_probs)
-    mask_value = default_replace_value or random.randint(random_keys[2], [image.shape[-1]],
+    mask_value = default_replace_value or random.randint(random_keys[2],
+                                                         [image.shape[-1]],
                                                          minval=-1, maxval=256)
-    random_magnitude = random.uniform(random_keys[3], [], minval=0., maxval=magnitude)
+    random_magnitude = random.uniform(random_keys[3], [], minval=0.,
+                                      maxval=magnitude)
     cutout_mask = color_transforms.get_random_cutout_mask(
         random_keys[4],
         image.shape,
         cutout_const)
 
-    translate_vals = (random.uniform(random_keys[5], [], minval=0.0, maxval=1.0) * translate_const,
-                      random.uniform(random_keys[6], [], minval=0.0, maxval=1.0) * translate_const)
-    negate = random.randint(random_keys[7], [], minval=0, maxval=2).astype('bool')
+    translate_vals = (random.uniform(random_keys[5], [], minval=0.0,
+                                     maxval=1.0) * translate_const,
+                      random.uniform(random_keys[6], [], minval=0.0,
+                                     maxval=1.0) * translate_const)
+    negate = random.randint(random_keys[7], [], minval=0,
+                            maxval=2).astype('bool')
 
-    args = level_to_arg(cutout_mask, translate_vals, negate, random_magnitude, mask_value)
+    args = level_to_arg(cutout_mask, translate_vals, negate,
+                        random_magnitude, mask_value)
 
     if DEBUG:
         print(op_to_select, args[op_to_select])
@@ -245,7 +253,8 @@ def _randaugment_inner_for_loop(_, in_args):
 
     geometric_transforms = jnp.matmul(geometric_transforms, geometric_transform)
     return(image, geometric_transforms, random_key, available_ops, op_probs,
-           magnitude, cutout_const, translate_const, join_transforms, default_replace_value)
+           magnitude, cutout_const, translate_const, join_transforms,
+           default_replace_value)
 
 
 @jax.jit
@@ -266,16 +275,18 @@ def distort_image_with_randaugment(image,
     Args:
         image: `Tensor` of shape [height, width, 3] representing an image.
         num_layers: Integer, the number of augmentation transformations to apply
-          sequentially to an image. Represented as (N) in the paper. Usually best
-          values will be in the range [1, 3].
+          sequentially to an image. Represented as (N) in the paper.
+          Usually best values will be in the range [1, 3].
         magnitude: Integer, shared magnitude across all augmentation operations.
           Represented as (M) in the paper. Usually best values are in the range
           [5, 30].
         random_key: random key to do random stuff
-        join_transforms: reduce multiple transforms to one. Much more efficient but simpler.
+        join_transforms: reduce multiple transforms to one.
+            Much more efficient but simpler.
         cutout_const: max cutout size int
         translate_const: maximum translation amount int
-        default_replace_value: default replacement value for pixels outside of the image
+        default_replace_value: default replacement value for pixels outside
+            of the image
         available_ops: available operations
         op_probs: probabilities of operations
         join_transforms: apply transformations immediately or join them
@@ -286,23 +297,27 @@ def distort_image_with_randaugment(image,
 
     geometric_transforms = jnp.identity(4)
 
-    for_i_args = (image, geometric_transforms, random_key, available_ops, op_probs,
-                  magnitude, cutout_const, translate_const, join_transforms, default_replace_value)
+    for_i_args = (image, geometric_transforms, random_key, available_ops,
+                  op_probs, magnitude, cutout_const, translate_const,
+                  join_transforms, default_replace_value)
 
     if DEBUG:  # un-jitted
         for i in range(num_layers):
             for_i_args = _randaugment_inner_for_loop(i, for_i_args)
     else:  # jitted
-        for_i_args = jax.lax.fori_loop(0, num_layers, _randaugment_inner_for_loop, for_i_args)
+        for_i_args = jax.lax.fori_loop(0, num_layers,
+                                       _randaugment_inner_for_loop, for_i_args)
 
     image, geometric_transforms = for_i_args[0], for_i_args[1]
 
     if join_transforms:
-        replace_value = default_replace_value or random.randint(random_key,
-                                                                [image.shape[-1]],
-                                                                minval=0,
-                                                                maxval=256)
-        image = transforms.apply_transform(image, geometric_transforms, mask_value=replace_value)
+        replace_value = jnp.ones([image.shape[-1]]) * default_replace_value or \
+                        random.randint(random_key,
+                                       [image.shape[-1]],
+                                       minval=0,
+                                       maxval=256)
+        image = transforms.apply_transform(image, geometric_transforms,
+                                           mask_value=replace_value)
 
     return image
 

@@ -232,7 +232,8 @@ def apply_transform(image,
                     intrinsic_matrix=-1,
                     bilinear=True):
     """
-    Applies a 3d transformation to an image. Can deal with depth data and intrinsic matrices.
+    Applies a 3d transformation to an image.
+    Can deal with depth data and intrinsic matrices.
     Args:
         image: image tensor
         transform: 4x4 transformation matrix
