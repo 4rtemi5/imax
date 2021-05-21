@@ -21,6 +21,8 @@
 AutoAugment Reference: https://arxiv.org/abs/1805.09501
 RandAugment Reference: https://arxiv.org/abs/1909.13719
 """
+from functools import partial
+
 import jax
 from jax import random
 import jax.numpy as jnp
@@ -78,9 +80,9 @@ def level_to_arg(cutout_val, translate_val, negate, level, mask_value):
         'Equalize': (),
         'Invert': (),
         'Posterize': (5 - jnp.min(jnp.array(
-            [4, (level / _MAX_LEVEL * 4).astype('int32')])),),
-        'Solarize': (((level / _MAX_LEVEL) * 256).astype('int32'),),
-        'SolarizeAdd': (((level / _MAX_LEVEL) * 110).astype('int32'),),
+            [4, (level / _MAX_LEVEL * 4).astype('uint8')])),),
+        'Solarize': (((level / _MAX_LEVEL) * 256).astype('uint8'),),
+        'SolarizeAdd': (((level / _MAX_LEVEL) * 110).astype('uint8'),),
         'Color': _enhance_level_to_arg(level),
         'Contrast': _enhance_level_to_arg(level),
         'Brightness': _enhance_level_to_arg(level),
@@ -215,12 +217,11 @@ def _randaugment_inner_for_loop(_, in_args):
     random_keys = random.split(random_key, num=8)
     random_key = random_keys[0]  # keep for next iteration
     op_to_select = random.choice(random_keys[1], available_ops, p=op_probs)
-    if default_replace_value is None:
-        mask_value = jnp.ones([image.shape[-1]]) * jnp.asarray(default_replace_value)
-    else:
-        mask_value = random.randint(random_keys[2],
-                                    [image.shape[-1]],
-                                    minval=-1, maxval=256)
+    mask_value = jnp.where(default_replace_value > 0,
+                           jnp.ones([image.shape[-1]]) * default_replace_value,
+                           random.randint(random_keys[2],
+                                          [image.shape[-1]],
+                                          minval=-1, maxval=256))
     random_magnitude = random.uniform(random_keys[3], [], minval=0.,
                                       maxval=magnitude)
     cutout_mask = color_transforms.get_random_cutout_mask(
@@ -260,14 +261,13 @@ def _randaugment_inner_for_loop(_, in_args):
            default_replace_value)
 
 
-@jax.jit
 def distort_image_with_randaugment(image,
                                    num_layers,
                                    magnitude,
                                    random_key,
                                    cutout_const=40,
                                    translate_const=50.0,
-                                   default_replace_value=None,
+                                   default_replace_value=-1,
                                    available_ops=DEFAULT_OPS,
                                    op_probs=DEFAULT_PROBS,
                                    join_transforms=False):
@@ -314,18 +314,17 @@ def distort_image_with_randaugment(image,
     image, geometric_transforms = for_i_args[0], for_i_args[1]
 
     if join_transforms:
-        if default_replace_value is None:
-            replace_value = jnp.ones([image.shape[-1]]) * jnp.asarray(default_replace_value)
-        else:
-            replace_value = random.randint(random_key,
-                                           [image.shape[-1]],
-                                           minval=0,
-                                           maxval=256)
+        replace_value = jnp.where(default_replace_value > 0,
+                                  jnp.ones([image.shape[-1]]) * default_replace_value,
+                                  random.randint(random_key,
+                                                 [image.shape[-1]],
+                                                 minval=0,
+                                                 maxval=256))
         image = transforms.apply_transform(image, geometric_transforms,
                                            mask_value=replace_value)
 
     return image
 
-
-if not DEBUG:
-    distort_image_with_randaugment = jax.jit(distort_image_with_randaugment)
+#
+# if not DEBUG:
+#     distort_image_with_randaugment = jax.jit(distort_image_with_randaugment, static_argnames=('default_replace_value', ))

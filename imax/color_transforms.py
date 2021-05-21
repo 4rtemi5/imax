@@ -346,7 +346,7 @@ def posterize(image, bits):
     degenerate = jnp.left_shift(jnp.right_shift(image, shift), shift)
 
     if has_alpha:
-        return jnp.concatenate([degenerate, alpha], axis=-1)
+        return jnp.concatenate([degenerate, alpha], axis=-1).astype('uint8')
     return degenerate.astype('uint8')
 
 
