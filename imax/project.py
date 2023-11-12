@@ -98,7 +98,7 @@ def meshgrid(height, width, is_homogeneous=True):
     return coords
 
 
-def compute_mask(coords_x, coords_y, x_max, y_max):
+def compute_mask(x0, x1, y0, y1, x_max, y_max):
     """
     Computes invalid pixel coordinates.
     Args:
@@ -110,19 +110,23 @@ def compute_mask(coords_x, coords_y, x_max, y_max):
     Returns:
         vector of mask values
     """
-    x_not_underflow = coords_x >= 0.0
-    y_not_underflow = coords_y >= 0.0
-    x_not_overflow = coords_x < x_max
-    y_not_overflow = coords_y < y_max
-    # z_positive = z > 0.0
+    x_not_underflow = x0 >= 0.0
+    y_not_underflow = y0 >= 0.0
+    x_not_overflow = x1 <= x_max
+    y_not_overflow = y1 <= y_max
+    # z_positive = z >= 0.0
     # x_not_nan = jnp.logical_not(jnp.isnan(coords_x))
     # y_not_nan = jnp.logical_not(jnp.isnan(coords_y))
     # not_nan = jnp.logical_and(x_not_nan, y_not_nan)
     # not_nan_mask = not_nan.astype('float32')
     # coords_x = tf.math.multiply_no_nan(coords_x, not_nan_mask)
     # coords_y = tf.math.multiply_no_nan(coords_y, not_nan_mask)
+    
     mask_stack = jnp.stack([
-        x_not_underflow, y_not_underflow, x_not_overflow, y_not_overflow,
+        x_not_underflow,
+        y_not_underflow,
+        x_not_overflow,
+        y_not_overflow,
         # z_positive,
         # not_nan
     ],
@@ -188,13 +192,13 @@ def nearest_sampler(imgs, coords, mask_value):
     coords_x = jnp.array(coords_x, dtype='float32')
     coords_y = jnp.array(coords_y, dtype='float32')
 
-    y_max = jnp.array(jnp.shape(imgs)[0] - 1, dtype='float32')
-    x_max = jnp.array(jnp.shape(imgs)[1] - 1, dtype='float32')
+    y_max = jnp.array(jnp.shape(imgs)[0], dtype='float32')
+    x_max = jnp.array(jnp.shape(imgs)[1], dtype='float32')
     zero = jnp.zeros([1], dtype='float32')
-    eps = jnp.array([0.5], dtype='float32')
+    eps = jnp.array([1e-6], dtype='float32')
 
-    coords_x_clipped = jnp.clip(coords_x, zero - eps, x_max + eps)
-    coords_y_clipped = jnp.clip(coords_y, zero - eps, y_max + eps)
+    coords_x_clipped = jnp.clip(coords_x, zero - 0.5 + eps, x_max + 0.5 + eps)
+    coords_y_clipped = jnp.clip(coords_y, zero - 0.5 + eps, y_max + 0.5 + eps)
 
     x0 = jnp.round(coords_x_clipped)
     y0 = jnp.round(coords_y_clipped)
@@ -215,11 +219,12 @@ def nearest_sampler(imgs, coords, mask_value):
         jnp.take(imgs_flat, idx00.astype('int32'), axis=0),
         out_size
     )
+    valid_mask = compute_mask(x0, x0, y0, y0, x_max, y_max)
 
     return jnp.where(
         jnp.any(mask_value > 0),
         jnp.where(
-            compute_mask(coords_x, coords_y, x_max, y_max),
+            valid_mask,
             output,
             jnp.ones_like(output) *
             jnp.reshape(jnp.array(mask_value), [1, 1, -1])
@@ -248,17 +253,17 @@ def bilinear_sampler(imgs, coords, mask_value):
     coords_x = jnp.array(coords_x, dtype='float32')
     coords_y = jnp.array(coords_y, dtype='float32')
 
-    y_max = jnp.array(jnp.shape(imgs)[0] - 1, dtype='float32')
-    x_max = jnp.array(jnp.shape(imgs)[1] - 1, dtype='float32')
+    y_max = jnp.array(jnp.shape(imgs)[0], dtype='float32')
+    x_max = jnp.array(jnp.shape(imgs)[1], dtype='float32')
     zero = jnp.zeros([1], dtype='float32')
-    eps = jnp.array([0.5], dtype='float32')
+    eps = jnp.array([1e-6], dtype='float32')
+    
+    coords_x_clipped = jnp.clip(coords_x, zero - 0.5 - eps, x_max + 0.5 + eps)
+    coords_y_clipped = jnp.clip(coords_y, zero - 0.5 - eps, y_max + 0.5 + eps)
 
-    coords_x_clipped = jnp.clip(coords_x, zero, x_max - eps)
-    coords_y_clipped = jnp.clip(coords_y, zero, y_max - eps)
-
-    x0 = jnp.floor(coords_x_clipped)
+    x0 = jnp.round(coords_x_clipped)
     x1 = x0 + 1
-    y0 = jnp.floor(coords_y_clipped)
+    y0 = jnp.round(coords_y_clipped)
     y1 = y0 + 1
 
     x0_safe = jnp.clip(x0, zero, x_max)
@@ -307,9 +312,11 @@ def bilinear_sampler(imgs, coords, mask_value):
     output = jnp.clip(jnp.round(w00 * im00 + w01 * im01 + w10 * im10 +
                                 w11 * im11), 0, 255)
 
+    valid_mask = compute_mask(x0, x1, y0, y1, x_max + 1, y_max + 1)
+
     return jnp.where(jnp.all(mask_value >= 0),
                      jnp.where(
-                         compute_mask(coords_x, coords_y, x_max, y_max),
+                         valid_mask,
                          output,
                          jnp.ones_like(output) *
                          jnp.reshape(jnp.array(mask_value), [1, 1, -1])
