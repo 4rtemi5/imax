@@ -2,6 +2,10 @@ from imax import transforms
 from jax import numpy as jnp
 from utils import compare
 
+
+from jax.config import config
+config.update("jax_debug_nans", True)
+
 # test_img_rgba = jnp.asarray(Image.open('./test.jpeg').convert('RGBA')).astype('uint8')
 # test_img_rgb = jnp.asarray(Image.open('./test.jpeg').convert('RGB')).astype('uint8')
 
@@ -11,7 +15,7 @@ rgb_img = jnp.array(
         [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
     ],
-    dtype="uint8",
+    dtype="float32",
 )
 
 rgba_img = jnp.array(
@@ -20,7 +24,7 @@ rgba_img = jnp.array(
         [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
         [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
     ],
-    dtype="uint8",
+    dtype="float32",
 )
 
 
@@ -38,7 +42,7 @@ def test_horizontal_flip():
     outputs = transforms.apply_transform(
         rgba_img,
         transforms.flip(horizontal=True, vertical=False),
-        mask_value=jnp.array([255, 255, 255, 255]),
+        mask_value=jnp.array([255., 255., 255., 255.]),
         bilinear=False,
     )
     compare(inputs, targets, outputs)
@@ -46,10 +50,10 @@ def test_horizontal_flip():
     outputs = transforms.apply_transform(
         rgba_img,
         transforms.flip(horizontal=True, vertical=False),
-        mask_value=jnp.array([255, 255, 255, 255]),
+        mask_value=jnp.array([255., 255., 255., 255.]),
         bilinear=True,
     )
-    compare(inputs, targets, outputs)
+    compare(inputs, targets, jnp.round(outputs))
 
 
 def test_vertical_flip():
@@ -70,7 +74,7 @@ def test_vertical_flip():
         mask_value=jnp.array([255, 255, 255, 255]),
         bilinear=True,
     )
-    compare(inputs, targets, outputs)
+    compare(inputs, targets, jnp.round(outputs))
 
 
 def test_rotate90():
@@ -90,7 +94,7 @@ def test_rotate90():
         mask_value=jnp.array([255, 255, 255, 255]),
         bilinear=True,
     )
-    compare(inputs, targets, outputs)
+    compare(inputs, targets, jnp.round(outputs))
 
 
 def test_scale():

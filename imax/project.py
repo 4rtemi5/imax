@@ -142,7 +142,7 @@ def projective_inverse_warp(img, transform, mask_value,
     Args:
         img: the source image [batch, height_s, width_s, 3]
         transform: 4x4 transformation matrix
-        mask_value: uint8 maks value of rgb/a mask value
+        mask_value: mask value of rgb/a mask value
         depth: depth map of the target image [batch, height_t, width_t]
         intrinsics: camera intrinsics [batch, 3, 3]
         bilinear: bool use bilinear or nearest sampling.
@@ -168,7 +168,7 @@ def projective_inverse_warp(img, transform, mask_value,
     output_img = jnp.where(bilinear,
                            bilinear_sampler(img, src_pixel_coords, mask_value),
                            nearest_sampler(img, src_pixel_coords, mask_value))
-    return output_img.astype('uint8')
+    return output_img
 
 
 def nearest_sampler(imgs, coords, mask_value):
@@ -266,10 +266,10 @@ def bilinear_sampler(imgs, coords, mask_value):
     y0 = jnp.round(coords_y_clipped)
     y1 = y0 + 1
 
-    x0_safe = jnp.clip(x0, zero, x_max)
-    y0_safe = jnp.clip(y0, zero, y_max)
-    x1_safe = jnp.clip(x1, zero, x_max)
-    y1_safe = jnp.clip(y1, zero, y_max)
+    x0_safe = jnp.clip(x0, zero, x_max - 1)
+    y0_safe = jnp.clip(y0, zero, y_max - 1)
+    x1_safe = jnp.clip(x1, zero, x_max - 1)
+    y1_safe = jnp.clip(y1, zero, y_max - 1)
 
     # bilinear interp weights, with points outside the grid having weight 0
     # wt_x0 = (x1 - coords_x) * jnp.equal(x0, x0_safe).astype('float32')
@@ -287,14 +287,14 @@ def bilinear_sampler(imgs, coords, mask_value):
 
     base_y0 = y0_safe * dim2
     base_y1 = y1_safe * dim2
-    idx00 = jnp.reshape(x0_safe + base_y0, [-1])
+    idx00 = x0_safe + base_y0
     idx01 = x0_safe + base_y1
     idx10 = x1_safe + base_y0
     idx11 = x1_safe + base_y1
 
     # sample from imgs
     imgs_flat = jnp.reshape(imgs, [-1, inp_size[2]])
-    imgs_flat = imgs_flat.astype('float32')
+    # imgs_flat = imgs_flat.astype('float32')
     im00 = jnp.reshape(
         jnp.take(imgs_flat, idx00.astype('int32'), axis=0), out_size)
     im01 = jnp.reshape(
@@ -309,16 +309,14 @@ def bilinear_sampler(imgs, coords, mask_value):
     w10 = wt_x1 * wt_y0
     w11 = wt_x1 * wt_y1
 
-    output = jnp.clip(jnp.round(w00 * im00 + w01 * im01 + w10 * im10 +
-                                w11 * im11), 0, 255)
-
-    valid_mask = compute_mask(x0, x1, y0, y1, x_max + 1, y_max + 1)
+    output = w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11
+    valid_mask = compute_mask(x0, x1, y0, y1, x_max, y_max)
 
     return jnp.where(jnp.all(mask_value >= 0),
                      jnp.where(
                          valid_mask,
                          output,
                          jnp.ones_like(output) *
-                         jnp.reshape(jnp.array(mask_value), [1, 1, -1])
+                         jnp.reshape(mask_value, [1, 1, -1])
                      ),
                      output)
