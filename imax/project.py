@@ -276,12 +276,60 @@ def bilinear_sampler(imgs, coords, mask_value):
     # wt_x1 = (coords_x - x0) * jnp.equal(x1, x1_safe).astype('float32')
     # wt_y0 = (y1 - coords_y) * jnp.equal(y0, y0_safe).astype('float32')
     # wt_y1 = (coords_y - y0) * jnp.equal(y1, y1_safe).astype('float32')
-
+    
     wt_x0 = x1_safe - coords_x  # 1
     wt_x1 = coords_x - x0_safe  # 0
     wt_y0 = y1_safe - coords_y  # 1
     wt_y1 = coords_y - y0_safe  # 0
 
+    x0_out = x0 < 0
+    x1_out = x1 > x_max - 1
+    y0_out = y0 < 0
+    y1_out = y1 > y_max - 1
+
+    w_x0 = jnp.where(
+        x0_out | x1_out,
+        jnp.where(
+            x0_out,
+            jnp.zeros_like(wt_x0),
+            jnp.ones_like(wt_x0),
+        ),
+        wt_x0,
+    )
+
+    w_x1 = jnp.where(
+        x0_out | x1_out,
+        jnp.where(
+            x0_out,
+            jnp.ones_like(wt_x1),
+            jnp.zeros_like(wt_x1),
+        ),
+        wt_x1
+    )
+
+    w_y0 = jnp.where(
+        y0_out | y1_out,
+        jnp.where(
+            y0_out,
+            jnp.zeros_like(wt_y0),
+            jnp.ones_like(wt_y0),
+        ),
+        wt_y0,
+    )
+
+    w_y1 = jnp.where(
+        y0_out | y1_out,
+        jnp.where(
+            y0_out,
+            jnp.ones_like(wt_y1),
+            jnp.zeros_like(wt_y1),
+        ),
+        wt_y1
+    )
+
+
+    
+    
     # indices in the flat image to sample from
     dim2 = jnp.array(inp_size[1], dtype='float32')
 
@@ -304,10 +352,10 @@ def bilinear_sampler(imgs, coords, mask_value):
     im11 = jnp.reshape(
         jnp.take(imgs_flat, idx11.astype('int32'), axis=0), out_size)
 
-    w00 = wt_x0 * wt_y0
-    w01 = wt_x0 * wt_y1
-    w10 = wt_x1 * wt_y0
-    w11 = wt_x1 * wt_y1
+    w00 = w_x0 * w_y0
+    w01 = w_x0 * w_y1
+    w10 = w_x1 * w_y0
+    w11 = w_x1 * w_y1
 
     output = w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11
     valid_mask = compute_mask(x0, x1, y0, y1, x_max, y_max)

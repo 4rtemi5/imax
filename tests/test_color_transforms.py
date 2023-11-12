@@ -3,8 +3,8 @@ from jax import numpy as jnp
 from utils import compare
 
 
-im1 = jnp.ones((3, 3, 3), dtype='uint8') * 255
-im2 = jnp.zeros((3, 3, 3), dtype='uint8')
+im1 = jnp.ones((3, 3, 3), dtype='float32') * 255
+im2 = jnp.zeros((3, 3, 3), dtype='float32')
 
 mask = jnp.array([
         [[0], [0], [0]],
@@ -14,16 +14,16 @@ mask = jnp.array([
 
 
 def test_blend():
-    factor = jnp.array(0.55 * 255, dtype='uint8')
+    factor = jnp.array(0.55 * 255, dtype='float32')
     inputs = [im1, im2]
-    targets = (im2 * factor).astype('uint8')
+    targets = (im2 * factor).astype('float32')
     outputs = color_transforms.blend(inputs[0], inputs[1], factor)
     compare(inputs, targets, outputs)
 
 
 def test_cutout():
     inputs = im2
-    targets = mask.astype('uint8') * 42
+    targets = mask.astype('float32') * 42
     outputs = color_transforms.cutout(inputs, mask, replace=42)
     compare(inputs, targets, outputs)
 
