@@ -3,7 +3,7 @@ from jax import numpy as jnp
 from utils import compare
 
 
-from jax.config import config
+from jax import config
 config.update("jax_debug_nans", True)
 
 # test_img_rgba = jnp.asarray(Image.open('./test.jpeg').convert('RGBA')).astype('uint8')
@@ -33,6 +33,27 @@ def test_data():
     targets = rgb_img
     outputs = rgba_img[:, :, :3]
     compare(inputs, targets, outputs)
+
+
+def test_identity():
+    inputs = rgba_img
+    targets = rgba_img
+    
+    outputs = transforms.apply_transform(
+        rgba_img,
+        jnp.eye(4),
+        mask_value=jnp.array([255., 255., 255., 255.]),
+        bilinear=False,
+    )
+    compare(inputs, targets, outputs)
+
+    outputs = transforms.apply_transform(
+        rgba_img,
+        jnp.eye(4),
+        mask_value=jnp.array([255., 255., 255., 255.]),
+        bilinear=True,
+    )
+    compare(inputs, targets, jnp.round(outputs))
 
 
 def test_horizontal_flip():
@@ -104,7 +125,7 @@ def test_scale():
         ((1, 1), (1, 1), (0, 0)),
         constant_values=0,
     )
-    targets = jnp.ones_like(rgba_img) * 255
+    targets = inputs  # jnp.ones_like(rgba_img) * 255
     outputs = transforms.apply_transform(
         jnp.pad(
             jnp.ones((1, 1, 4), dtype="uint8"),

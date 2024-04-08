@@ -29,6 +29,14 @@ Image transformations with nearest neighbor and bilinear sampling.
 import jax
 import jax.numpy as jnp
 
+def extend3to4(intrinsics):
+    """ Extrend size of 3x3 intrinsics to 4x4 intrinsics.
+    """
+    filler = jnp.array([[0.0, 0.0, 0.0, 1.0]])
+    intrinsics = jnp.concatenate([intrinsics, jnp.zeros([3, 1])], axis=1)
+    intrinsics = jnp.concatenate([intrinsics, filler], axis=0)
+    return intrinsics
+
 
 def pixel2cam(depth, pixel_coords, intrinsics, is_homogeneous=True):
     """Transforms coordinates in the pixel frame to the camera frame.
@@ -51,7 +59,6 @@ def pixel2cam(depth, pixel_coords, intrinsics, is_homogeneous=True):
     return cam_coords
 
 
-@jax.jit
 def cam2pixel(cam_coords, proj):
     """Transforms coordinates in a camera frame to the pixel frame.
     Args:
@@ -68,8 +75,8 @@ def cam2pixel(cam_coords, proj):
     z_u = unnormalized_pixel_coords[2:3, :]  # [0:2:0, -1:1:-1]
     x_n = x_u / (z_u + 1e-10)
     y_n = y_u / (z_u + 1e-10)
-    pixel_coords = jnp.concatenate([x_n, y_n], axis=0)
-    pixel_coords = jnp.reshape(pixel_coords, [2, height, width])
+    pixel_coords = jnp.concatenate([x_n, y_n, z_u], axis=0)
+    pixel_coords = jnp.reshape(pixel_coords, [3, height, width])
     return jnp.transpose(pixel_coords, axes=[1, 2, 0])
 
 
@@ -98,7 +105,118 @@ def meshgrid(height, width, is_homogeneous=True):
     return coords
 
 
-def compute_mask(x0, x1, y0, y1, x_max, y_max):
+def bilinear_project(points_yx, depth, values, height, width, mask_value=0):
+    # Create empty matrices, starting from 0 to p.max
+    channels = values.shape[-1] + 1
+    w = jnp.zeros((height, width))
+    i = jnp.zeros((height, width, channels))
+
+    valid_mask = (
+        jnp.isfinite(depth) 
+        # & jnp.greater_equal(depth, 0)
+        & jnp.isfinite(points_yx).all(axis=1)
+        # & ~compute_occlusions(points_yx, depth)
+        & jnp.greater_equal(points_yx, 0.).all(axis=1)
+        & (points_yx[:, 0] < (height))
+        & (points_yx[:, 1] < (width))
+    )
+    
+    # Calc weights
+    floor = jnp.floor(points_yx)
+    ceil = floor + 1
+    upper_diff = ceil - points_yx
+    lower_diff = points_yx - floor
+    w1 = upper_diff[:, 0] * upper_diff[:, 1] * valid_mask
+    w2 = upper_diff[:, 0] * lower_diff[:, 1] * valid_mask
+    w3 = lower_diff[:, 0] * upper_diff[:, 1] * valid_mask
+    w4 = lower_diff[:, 0] * lower_diff[:, 1] * valid_mask
+    
+    # Get indices
+    ix = floor[:, 0].astype("uint32")
+    iy = floor[:, 1].astype("uint32")
+
+    w = w.at[ix, iy].add(w1, mode="drop")
+    w = w.at[ix, iy + 1].add(w2, mode="drop")
+    w = w.at[ix + 1, iy].add(w3, mode="drop")
+    w = w.at[ix + 1, iy + 1].add(w4, mode="drop")
+    #w += 1e-6
+
+    values = jnp.concatenate([
+        values,
+        depth[..., None],
+    ], axis=1)
+
+    values = values.flatten()
+    ix = ix.repeat(channels)
+    iy = iy.repeat(channels)
+    iz = jnp.tile(jnp.arange(channels), height * width)
+
+    w1 = w1.repeat(channels)
+    w2 = w2.repeat(channels)
+    w3 = w3.repeat(channels)
+    w4 = w4.repeat(channels)
+
+    i = i.at[ix, iy, iz].add(w1 * values, mode="drop")
+    i = i.at[ix, iy + 1, iz].add(w2 * values, mode="drop")
+    i = i.at[ix + 1, iy, iz].add(w3 * values, mode="drop")
+    i = i.at[ix + 1, iy + 1, iz].add(w4 * values, mode="drop")
+
+    i = i / jnp.clip(w[..., None], 1e-6, 1.0) * jnp.greater(w[..., None], 0.0)
+    values_out, depth_out = i[..., :-1], i[..., -1:]
+
+    values_out = jnp.where(
+        jnp.equal(w[..., None], 0),
+        mask_value,
+        values_out
+    )
+
+    return values_out, depth_out
+
+
+def depth_warp(
+    input_image,
+    input_depth,
+    intrinsics,
+    transform,
+    mask_value=0,
+):
+    # intrinsics = extend3to4(intrinsics)
+    height, width = input_depth.shape
+
+    # Construct pixel grid coordinates
+    pixel_coords = meshgrid(height, width, is_homogeneous=False)
+    depth = input_depth.reshape((1, -1))
+    ones = jnp.ones_like(depth)
+    pixel_mesh = jnp.reshape(pixel_coords, [2, -1])
+
+    pixel_coords = jnp.concatenate([pixel_mesh, ones], axis=0)
+
+    target_pixel_coords = jnp.linalg.inv(intrinsics) @ pixel_coords
+
+    target_pixel_coords = jnp.concatenate([target_pixel_coords, ones], axis=0)
+    target_pixel_coords = jnp.concatenate(
+        [target_pixel_coords[:2] * depth, depth, ones], axis=0
+    )
+
+    target_pixel_coords = transform @ target_pixel_coords
+    
+    x, y, z, _ = jnp.split(target_pixel_coords, 4, axis=0)
+    target_pixel_coords = jnp.concatenate([target_pixel_coords[:2] / jnp.clip(depth, 1.0, jnp.inf), ones], axis=0)
+    target_pixel_coords = intrinsics @ target_pixel_coords
+
+    coords = jnp.concatenate([target_pixel_coords[0:1], target_pixel_coords[1:2]], axis=0).T  # new y, x coordinates
+
+    values = jnp.concatenate([
+        input_image.reshape((-1, input_image.shape[-1])),  # original image values (eg. rgb)
+    ], axis=1)
+    
+    new_depth = z.reshape((-1,))  # new z-coordinates
+
+    projected_values, projected_depth = bilinear_project(coords, new_depth, values, height, width, mask_value)
+    return projected_values, projected_depth
+
+
+def compute_mask(x0, x1, y0, y1, z, x_max, y_max):
     """
     Computes invalid pixel coordinates.
     Args:
@@ -114,7 +232,7 @@ def compute_mask(x0, x1, y0, y1, x_max, y_max):
     y_not_underflow = y0 >= 0.0
     x_not_overflow = x1 <= x_max
     y_not_overflow = y1 <= y_max
-    # z_positive = z >= 0.0
+    z_positive = z >= 0.0
     # x_not_nan = jnp.logical_not(jnp.isnan(coords_x))
     # y_not_nan = jnp.logical_not(jnp.isnan(coords_y))
     # not_nan = jnp.logical_and(x_not_nan, y_not_nan)
@@ -127,7 +245,7 @@ def compute_mask(x0, x1, y0, y1, x_max, y_max):
         y_not_underflow,
         x_not_overflow,
         y_not_overflow,
-        # z_positive,
+        z_positive,
         # not_nan
     ],
         axis=0)
@@ -135,8 +253,15 @@ def compute_mask(x0, x1, y0, y1, x_max, y_max):
     return mask
 
 
-def projective_inverse_warp(img, transform, mask_value,
-                            intrinsics, depth, bilinear=True):
+def projective_inverse_warp(
+    img,
+    depth,
+    image_intrinsics,
+    depth_intrinsics,
+    transform,
+    mask_value,
+    bilinear=True,
+):
     """
     Inverse warp a source image to the target image plane based on projection.
     Args:
@@ -154,15 +279,12 @@ def projective_inverse_warp(img, transform, mask_value,
     # Construct pixel grid coordinates
     pixel_coords = meshgrid(height, width)
     # Convert pixel coordinates to the camera frame
-    cam_coords = pixel2cam(depth, pixel_coords, intrinsics)
+    cam_coords = pixel2cam(depth, pixel_coords, depth_intrinsics)
     # Construct a 4x4 intrinsic matrix
-    filler = jnp.array([[0.0, 0.0, 0.0, 1.0]])
-    # filler = jnp.tile(filler, [batch, 1, 1])
-    intrinsics = jnp.concatenate([intrinsics, jnp.zeros([3, 1])], axis=1)
-    intrinsics = jnp.concatenate([intrinsics, filler], axis=0)
+    image_intrinsics = extend3to4(image_intrinsics)
     # Get a 4x4 transformation matrix from 'target' camera frame to 'source'
     # pixel frame.
-    proj_tgt_cam_to_src_pixel = jnp.matmul(intrinsics, transform)
+    proj_tgt_cam_to_src_pixel = jnp.matmul(image_intrinsics, transform)
     src_pixel_coords = cam2pixel(cam_coords, proj_tgt_cam_to_src_pixel)
 
     output_img = jnp.where(bilinear,
@@ -184,7 +306,7 @@ def nearest_sampler(imgs, coords, mask_value):
         Returns:
             A new sampled image [height_t, width_t, channels]
     """
-    coords_x, coords_y = jnp.split(coords, 2, axis=2)
+    coords_x, coords_y, z = jnp.split(coords, 3, axis=2)
     inp_size = imgs.shape
     out_size = list(coords.shape)
     out_size[2] = imgs.shape[2]
@@ -192,8 +314,8 @@ def nearest_sampler(imgs, coords, mask_value):
     coords_x = jnp.array(coords_x, dtype='float32')
     coords_y = jnp.array(coords_y, dtype='float32')
 
-    y_max = jnp.array(jnp.shape(imgs)[0], dtype='float32')
-    x_max = jnp.array(jnp.shape(imgs)[1], dtype='float32')
+    y_max = jnp.array(jnp.shape(imgs)[0], dtype='float32') - 1
+    x_max = jnp.array(jnp.shape(imgs)[1], dtype='float32') - 1
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([1e-6], dtype='float32')
 
@@ -219,7 +341,7 @@ def nearest_sampler(imgs, coords, mask_value):
         jnp.take(imgs_flat, idx00.astype('int32'), axis=0),
         out_size
     )
-    valid_mask = compute_mask(x0, x0, y0, y0, x_max, y_max)
+    valid_mask = compute_mask(x0, x0, y0, y0, z, x_max, y_max)
 
     return jnp.where(
         jnp.any(mask_value > 0),
@@ -245,7 +367,7 @@ def bilinear_sampler(imgs, coords, mask_value):
         Returns:
             A new sampled image [height_t, width_t, channels]
     """
-    coords_x, coords_y = jnp.split(coords, 2, axis=2)
+    coords_x, coords_y, z = jnp.split(coords, 3, axis=2)
     inp_size = imgs.shape
     out_size = list(coords.shape)
     out_size[2] = imgs.shape[2]
@@ -253,8 +375,8 @@ def bilinear_sampler(imgs, coords, mask_value):
     coords_x = jnp.array(coords_x, dtype='float32')
     coords_y = jnp.array(coords_y, dtype='float32')
 
-    y_max = jnp.array(jnp.shape(imgs)[0], dtype='float32')
-    x_max = jnp.array(jnp.shape(imgs)[1], dtype='float32')
+    y_max = jnp.array(jnp.shape(imgs)[0], dtype='int32')
+    x_max = jnp.array(jnp.shape(imgs)[1], dtype='int32')
     zero = jnp.zeros([1], dtype='float32')
     eps = jnp.array([1e-6], dtype='float32')
     
@@ -358,7 +480,7 @@ def bilinear_sampler(imgs, coords, mask_value):
     w11 = w_x1 * w_y1
 
     output = w00 * im00 + w01 * im01 + w10 * im10 + w11 * im11
-    valid_mask = compute_mask(x0, x1, y0, y1, x_max, y_max)
+    valid_mask = compute_mask(x0, x1, y0, y1, z, x_max, y_max)
 
     return jnp.where(jnp.all(mask_value >= 0),
                      jnp.where(

@@ -17,12 +17,12 @@ Geometric Transforms in Jax.
 """
 import jax
 import jax.numpy as jnp
-from imax.project import projective_inverse_warp
+from imax.project import projective_inverse_warp, depth_warp
 
 I = jnp.identity(4)
 
 
-@jax.jit
+# @jax.jit
 def scale_3d(scale_x=1., scale_y=1., scale_z=1., scale_xyz=1.):
     """
     Returns transformation matrix for 3d scaling.
@@ -42,7 +42,7 @@ def scale_3d(scale_x=1., scale_y=1., scale_z=1., scale_xyz=1.):
     return matrix
 
 
-@jax.jit
+# @jax.jit
 def scale(x_factor=1.0, y_factor=1.0):
     """
     Returns transformation matrix for 2d scaling.
@@ -56,7 +56,7 @@ def scale(x_factor=1.0, y_factor=1.0):
     return scale_3d(scale_x=x_factor, scale_y=y_factor)
 
 
-@jax.jit
+# @jax.jit
 def shear_3d(sxy=0., sxz=0., syx=0., syz=0., szx=0., szy=0.):
     """
     Returns transformation matrix for 3d shearing.
@@ -78,7 +78,7 @@ def shear_3d(sxy=0., sxz=0., syx=0., syz=0., szx=0., szy=0.):
     return matrix
 
 
-@jax.jit
+# @jax.jit
 def shear(horizontal=0., vertical=0.):
     """
     Returns transformation matrix for 2d shearing.
@@ -92,7 +92,7 @@ def shear(horizontal=0., vertical=0.):
     return shear_3d(sxy=horizontal, syx=vertical)
 
 
-@jax.jit
+# @jax.jit
 def translate_3d(translate_x=0, translate_y=0, translate_z=0):
     """
     Returns transformation matrix for 3d translation.
@@ -111,7 +111,7 @@ def translate_3d(translate_x=0, translate_y=0, translate_z=0):
     return matrix
 
 
-@jax.jit
+# @jax.jit
 def translate(horizontal, vertical):
     """
     Returns transformation matrix for 2d translation.
@@ -125,7 +125,7 @@ def translate(horizontal, vertical):
     return translate_3d(translate_x=horizontal, translate_y=vertical)
 
 
-@jax.jit
+# @jax.jit
 def flip(horizontal=False, vertical=False):
     """
     Returns transformation matrix for 2d flipping.
@@ -156,7 +156,7 @@ def flip(horizontal=False, vertical=False):
     return matrix
 
 
-@jax.jit
+# @jax.jit
 def rotate90(n=0):
     """
     Returns transformation matrix for 2d rotation of multiples of 90°.
@@ -175,7 +175,7 @@ def rotate90(n=0):
     return matrix
 
 
-@jax.jit
+# @jax.jit
 def rotate_3d(angle_x=0, angle_y=0, angle_z=0):
     """
     Returns transformation matrix for 3d rotation.
@@ -211,7 +211,7 @@ def rotate_3d(angle_x=0, angle_y=0, angle_z=0):
     return matrix
 
 
-@jax.jit
+# @jax.jit
 def rotate(rad):
     """
     Returns transformation matrix for 2d rotation around the z axis.
@@ -224,10 +224,10 @@ def rotate(rad):
     return rotate_3d(angle_z=rad)
 
 
-@jax.jit
+# @jax.jit
 def apply_transform(image,
                     transform,
-                    mask_value=-1,
+                    mask_value=jnp.nan,
                     depth=-1,
                     intrinsic_matrix=-1,
                     bilinear=True):
@@ -260,9 +260,21 @@ def apply_transform(image,
                                             [0, 0, 1]],
                                            dtype='float32'))
 
-    return projective_inverse_warp(image,
-                                   transform,
-                                   mask_value,
-                                   intrinsic_matrix,
-                                   depth,
-                                   bilinear=bilinear)
+
+    projected_image, projected_depth =  depth_warp(
+        image,
+        depth,
+        intrinsic_matrix,
+        transform,
+        mask_value
+    )
+    return projected_image
+    # return projective_inverse_warp(
+    #     image,
+    #     depth,
+    #     image_intrinsics=intrinsic_matrix,
+    #     depth_intrinsics=intrinsic_matrix,
+    #     transform=transform,
+    #     mask_value=mask_value,
+    #     bilinear=bilinear,
+    # )

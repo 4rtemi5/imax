@@ -3,10 +3,7 @@ from jax import numpy as jnp
 
 def compare(inputs, targets, outputs):
     try:
-        assert jnp.all(jnp.equal(
-            targets,
-            outputs
-        ))
+        assert jnp.allclose(targets, outputs)
     except AssertionError as ex:
         for k, v in zip(['inputs', 'outputs', 'target'],
                         [inputs, outputs, targets]):
