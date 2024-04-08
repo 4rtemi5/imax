@@ -105,7 +105,7 @@ def meshgrid(height, width, is_homogeneous=True):
     return coords
 
 
-def bilinear_project(points_yx, depth, values, height, width, mask_value=0):
+def bilinear_project(points, depth, values, height, width, mask_value=0):
     # Create empty matrices, starting from 0 to p.max
     channels = values.shape[-1] + 1
     w = jnp.zeros((height, width))
@@ -114,26 +114,26 @@ def bilinear_project(points_yx, depth, values, height, width, mask_value=0):
     valid_mask = (
         jnp.isfinite(depth) 
         # & jnp.greater_equal(depth, 0)
-        & jnp.isfinite(points_yx).all(axis=1)
+        & jnp.isfinite(points).all(axis=0)
         # & ~compute_occlusions(points_yx, depth)
-        & jnp.greater_equal(points_yx, 0.).all(axis=1)
-        & (points_yx[:, 0] < (height))
-        & (points_yx[:, 1] < (width))
+        & jnp.greater_equal(points, 0.).all(axis=0)
+        & (points[0] < (height))
+        & (points[1] < (width))
     )
     
     # Calc weights
-    floor = jnp.floor(points_yx)
+    floor = jnp.floor(points)
     ceil = floor + 1
-    upper_diff = ceil - points_yx
-    lower_diff = points_yx - floor
-    w1 = upper_diff[:, 0] * upper_diff[:, 1] * valid_mask
-    w2 = upper_diff[:, 0] * lower_diff[:, 1] * valid_mask
-    w3 = lower_diff[:, 0] * upper_diff[:, 1] * valid_mask
-    w4 = lower_diff[:, 0] * lower_diff[:, 1] * valid_mask
+    upper_diff = ceil - points
+    lower_diff = points - floor
+    w1 = upper_diff[0] * upper_diff[1] * valid_mask
+    w2 = upper_diff[0] * lower_diff[1] * valid_mask
+    w3 = lower_diff[0] * upper_diff[1] * valid_mask
+    w4 = lower_diff[0] * lower_diff[1] * valid_mask
     
     # Get indices
-    ix = floor[:, 0].astype("uint32")
-    iy = floor[:, 1].astype("uint32")
+    ix = floor[0].astype("uint32")
+    iy = floor[1].astype("uint32")
 
     w = w.at[ix, iy].add(w1, mode="drop")
     w = w.at[ix, iy + 1].add(w2, mode="drop")
@@ -201,10 +201,10 @@ def depth_warp(
     target_pixel_coords = transform @ target_pixel_coords
     
     x, y, z, _ = jnp.split(target_pixel_coords, 4, axis=0)
-    target_pixel_coords = jnp.concatenate([target_pixel_coords[:2] / jnp.clip(depth, 1.0, jnp.inf), ones], axis=0)
+    target_pixel_coords = jnp.concatenate([target_pixel_coords[:2] / jnp.clip(depth, 1e-10, jnp.inf), ones], axis=0)
     target_pixel_coords = intrinsics @ target_pixel_coords
 
-    coords = jnp.concatenate([target_pixel_coords[0:1], target_pixel_coords[1:2]], axis=0).T  # new y, x coordinates
+    coords = jnp.concatenate([target_pixel_coords[0:1], target_pixel_coords[1:2]], axis=0)  # new y, x coordinates
 
     values = jnp.concatenate([
         input_image.reshape((-1, input_image.shape[-1])),  # original image values (eg. rgb)

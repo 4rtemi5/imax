@@ -125,7 +125,7 @@ def test_scale():
         ((1, 1), (1, 1), (0, 0)),
         constant_values=0,
     )
-    targets = inputs  # jnp.ones_like(rgba_img) * 255
+    targets = inputs
     outputs = transforms.apply_transform(
         jnp.pad(
             jnp.ones((1, 1, 4), dtype="uint8"),
