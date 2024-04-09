@@ -169,7 +169,6 @@ def bilinear_project(points, depth, values, height, width, mask_value=0):
         mask_value,
         values_out
     )
-
     return values_out, depth_out
 
 
@@ -191,6 +190,7 @@ def depth_warp(
 
     pixel_coords = jnp.concatenate([pixel_mesh, ones], axis=0)
 
+
     target_pixel_coords = jnp.linalg.inv(intrinsics) @ pixel_coords
 
     target_pixel_coords = jnp.concatenate([target_pixel_coords, ones], axis=0)
@@ -201,10 +201,10 @@ def depth_warp(
     target_pixel_coords = transform @ target_pixel_coords
     
     x, y, z, _ = jnp.split(target_pixel_coords, 4, axis=0)
-    target_pixel_coords = jnp.concatenate([target_pixel_coords[:2] / jnp.clip(depth, 1e-10, jnp.inf), ones], axis=0)
+    target_pixel_coords = jnp.concatenate([target_pixel_coords[:2], ones], axis=0)
     target_pixel_coords = intrinsics @ target_pixel_coords
 
-    coords = jnp.concatenate([target_pixel_coords[0:1], target_pixel_coords[1:2]], axis=0)  # new y, x coordinates
+    coords = jnp.concatenate([target_pixel_coords[1:2], target_pixel_coords[0:1]], axis=0)  # new y, x coordinates
 
     values = jnp.concatenate([
         input_image.reshape((-1, input_image.shape[-1])),  # original image values (eg. rgb)

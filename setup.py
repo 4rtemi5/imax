@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="imax",
-    version="0.0.1-beta9",
+    version="0.0.1-beta10",
     author="Raphael Pisoni",
     author_email="raphael.pisoni@gmail.com",
     description="Image augmentation library for Jax",

@@ -261,7 +261,7 @@ def apply_transform(image,
                                            dtype='float32'))
 
 
-    projected_image, projected_depth =  depth_warp(
+    projected_image, _ =  depth_warp(
         image,
         depth,
         intrinsic_matrix,

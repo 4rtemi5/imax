@@ -58,7 +58,7 @@ def test_identity():
 
 def test_horizontal_flip():
     inputs = rgba_img
-    targets = rgba_img[:, ::-1]
+    targets = rgba_img[::-1]
     
     outputs = transforms.apply_transform(
         rgba_img,
@@ -79,7 +79,7 @@ def test_horizontal_flip():
 
 def test_vertical_flip():
     inputs = rgba_img
-    targets = rgba_img[::-1]
+    targets = rgba_img[:, ::-1]
     outputs = transforms.apply_transform(
         rgba_img, 
         transforms.flip(horizontal=False, vertical=True),
@@ -89,7 +89,7 @@ def test_vertical_flip():
     compare(inputs, targets, outputs)
     
     inputs = rgba_img
-    targets = rgba_img[::-1]
+    targets = rgba_img[:, ::-1]
     outputs = transforms.apply_transform(
         rgba_img, transforms.flip(horizontal=False, vertical=True),
         mask_value=jnp.array([255, 255, 255, 255]),
