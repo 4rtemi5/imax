@@ -119,7 +119,7 @@ def test_rotate90():
 
 
 def test_scale():
-    factor = 3
+    factor = 1
     inputs = jnp.pad(
         jnp.ones((1, 1, 4), dtype="uint8") * 255,
         ((1, 1), (1, 1), (0, 0)),

@@ -139,7 +139,7 @@ def bilinear_project(points, depth, values, height, width, mask_value=0):
     w = w.at[ix, iy + 1].add(w2, mode="drop")
     w = w.at[ix + 1, iy].add(w3, mode="drop")
     w = w.at[ix + 1, iy + 1].add(w4, mode="drop")
-    #w += 1e-6
+    w = w[..., None]
 
     values = jnp.concatenate([
         values,
@@ -160,12 +160,17 @@ def bilinear_project(points, depth, values, height, width, mask_value=0):
     i = i.at[ix, iy + 1, iz].add(w2 * values, mode="drop")
     i = i.at[ix + 1, iy, iz].add(w3 * values, mode="drop")
     i = i.at[ix + 1, iy + 1, iz].add(w4 * values, mode="drop")
+    
+    i = jnp.where(
+        jnp.greater(w, 0),
+        i / w,
+        i
+    )
 
-    i = i / jnp.clip(w[..., None], 1e-6, 1.0) * jnp.greater(w[..., None], 0.0)
     values_out, depth_out = i[..., :-1], i[..., -1:]
 
     values_out = jnp.where(
-        jnp.equal(w[..., None], 0),
+        jnp.equal(w, 0),
         mask_value,
         values_out
     )

@@ -8,8 +8,6 @@ def compare(inputs, targets, outputs):
         for k, v in zip(['inputs', 'outputs', 'target'],
                         [inputs, outputs, targets]):
             print(k)
-            v = jnp.transpose(v, (2, 0, 1))
-            for channel in v:
-                print(channel)
+            print(v)
             print()
         raise ex
